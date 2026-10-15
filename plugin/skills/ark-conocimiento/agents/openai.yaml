@@ -1,0 +1,4 @@
+interface:
+  display_name: "ARK Conocimiento"
+  short_description: "Modelo de datos y reglas generales de ARK"
+  default_prompt: "Usa $ark-conocimiento para aplicar las reglas y convenciones generales de ARK."

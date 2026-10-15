@@ -1,0 +1,29 @@
+services:
+  ark-work:
+    build: .
+    restart: unless-stopped
+    environment:
+      PUBLIC_URL: https://${WORK_DOMAIN:?Set WORK_DOMAIN}
+      WORK_ENCRYPTION_KEY: ${WORK_ENCRYPTION_KEY:?Set WORK_ENCRYPTION_KEY}
+      OAUTH_REDIRECT_URIS: ${OAUTH_REDIRECT_URIS:?Set exact OAUTH_REDIRECT_URIS}
+      ARK_BASE_URL: ${ARK_BASE_URL:-https://ark.gestionveterinariaark.es/ark/rest}
+    volumes:
+      - ark-data:/app/data
+  https:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      WORK_DOMAIN: ${WORK_DOMAIN:?Set WORK_DOMAIN}
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - ark-work
+volumes:
+  ark-data:
+  caddy-data:
+  caddy-config:

@@ -1,0 +1,3 @@
+{$WORK_DOMAIN} {
+  reverse_proxy ark-work:8787
+}

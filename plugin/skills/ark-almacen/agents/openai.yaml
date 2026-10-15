@@ -1,0 +1,4 @@
+interface:
+  display_name: "ARK Almacén"
+  short_description: "Artículos, lotes y existencias en ARK"
+  default_prompt: "Usa $ark-almacen para consultar las existencias de un artículo en ARK."

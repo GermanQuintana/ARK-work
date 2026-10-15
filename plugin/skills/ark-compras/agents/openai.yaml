@@ -1,0 +1,4 @@
+interface:
+  display_name: "ARK Compras"
+  short_description: "Facturación, proveedores y compras en ARK"
+  default_prompt: "Usa $ark-compras para revisar compras y facturas pendientes en ARK."

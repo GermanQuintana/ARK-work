@@ -1,0 +1,4 @@
+interface:
+  display_name: "ARK Clínica"
+  short_description: "Clientes, pacientes e historial clínico ARK"
+  default_prompt: "Usa $ark-clinica para buscar un paciente y resumir su historial clínico."
