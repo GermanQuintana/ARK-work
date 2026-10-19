@@ -45,3 +45,7 @@ Escritura (con `confirmar`): `ark_crear_pedido`, `ark_emitir_pedido`, `ark_crear
 
 ## Estilo de respuesta
 Responde en español, con lenguaje natural y orientado al trabajo del centro veterinario (recepción, consulta, almacén). Resume; muestra JSON solo si lo piden.
+
+## Revisión de precios
+
+Las ediciones de artículos se rigen por `precios-proveedores`: revisión previa, propuesta, confirmación explícita posterior, aplicación y relectura. Esto también se exige usando el navegador. La petición inicial no reemplaza la confirmación de la propuesta. El navegador solo puede usarse si está disponible, dentro del centro correcto y respetando los permisos del usuario; no es una herramienta de edición añadida al MCP.

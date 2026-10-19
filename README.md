@@ -70,3 +70,13 @@ Las pruebas usan un ARK falso local y comprueban aislamiento entre clínicas, PK
 - No actives registro de cuerpos, contraseñas, cookies o tokens en el proxy ni en el alojamiento. El servicio no imprime esos datos.
 - Las pruebas automatizadas no sustituyen validar OAuth con una cuenta real de ChatGPT, revisar el despliegue y realizar una revisión de seguridad antes de ofrecer un servicio multiclínica público.
 - El mismo perfil se identifica por la combinación de URL de ARK, código de empresa y usuario. Si el proveedor cambia esos identificadores, se considerará otro perfil.
+
+## Tarifas de proveedores y edición de productos
+
+La skill **Precios proveedores** (`$precios-proveedores`) revisa PDF, imágenes y Excel, cruza artículos y existencias y prepara cambios de coste, PVP y nombre interno. Mantiene el margen histórico fiable de tarifa 1; la tarifa 2 de personal queda a coste, con redondeo hacia arriba y margen objetivo del 0–2 %. Un PVP explícito del usuario se respeta y se informa del margen resultante. Al cambiar precios, añade o sustituye el año de revisión del nombre interno; conserva la descripción externa.
+
+**Flujo:** revisar → mostrar tabla anterior/propuesto → esperar confirmación explícita → aplicar solo lo aprobado → verificar lo guardado. Una confirmación cubre la tanda presentada; los cambios materiales requieren nueva revisión de lo afectado. No se rellenan ni guardan campos antes de confirmar.
+
+El MCP actual no incorpora edición de artículos existentes. Si hay navegador accesible con ARK en el mismo centro y permisos adecuados, la skill puede aplicar allí los cambios tras confirmarlos y contrastar el resultado con el MCP. Si no hay vía de edición, entrega la propuesta pendiente sin afirmar que está aplicada. No se crean compras ni entradas de stock para simular una edición de precios. No se incluyen datos reales ni credenciales en esta mejora.
+
+ARK Work sigue requiriendo despliegue y registro del servicio remoto. La skill no proporciona control del equipo a una sesión web que carezca de esa capacidad. Versión del paquete de skills: 0.1.1; servidor sin cambios.

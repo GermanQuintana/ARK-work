@@ -1,0 +1,4 @@
+interface:
+  display_name: "Precios proveedores"
+  short_description: "Revisar tarifas, márgenes, precios y stock en ARK"
+  default_prompt: "Usa $precios-proveedores para revisar esta tarifa de proveedor, contrastarla con ARK y preparar los cambios de coste y PVP."
