@@ -97,7 +97,7 @@ test('PKCE, audience and single-use authorization codes are enforced',async()=>{
   assert.equal((await exchange(flow)).status,200);
   assert.equal((await exchange(flow)).status,400);
 });
-test('two clinic connections cannot read each other and profiles survive reconnect',async()=>{
+test('clinic connections isolate data and get separate profiles on reconnect',async()=>{
   const a=await (await exchange(await authorize('A'))).json();
   const b=await (await exchange(await authorize('B'))).json();
   const ca=await connect(a.access_token),cb=await connect(b.access_token);
@@ -109,7 +109,7 @@ test('two clinic connections cannot read each other and profiles survive reconne
     assert.notEqual(pa.structuredContent.id,pb.structuredContent.id);
     const again=await (await exchange(await authorize('A'))).json();
     const cc=await connect(again.access_token);
-    try{assert.equal((await cc.callTool({name:'get_profile',arguments:{}})).structuredContent.id,pa.structuredContent.id);}finally{await cc.close();}
+    try{assert.notEqual((await cc.callTool({name:'get_profile',arguments:{}})).structuredContent.id,pa.structuredContent.id);}finally{await cc.close();}
   }finally{await ca.close();await cb.close();}
 });
 test('read-only consent hides writes; explicit write consent exposes preview tools',async()=>{
@@ -152,4 +152,38 @@ test('production settings refuse HTTP and missing redirect allowlists',()=>{
   const settings={publicUrl:new URL('http://127.0.0.1'),arkUrl:ark,dbPath:':memory:',encryptionKey:randomBytes(32),redirects:new Set([callback])};
   assert.throws(()=>createApp(settings),/HTTPS/);
   assert.throws(()=>createApp({...settings,publicUrl:new URL('https://work.example'),arkUrl:new URL('https://ark.example/rest'),redirects:new Set()}),/redirect/);
+});
+
+test('same tenant and username never share a mutable OAuth profile',async()=>{
+  const first=await (await exchange(await authorize('SHARED'))).json();
+  const second=await (await exchange(await authorize('SHARED'))).json();
+  const a=await connect(first.access_token),b=await connect(second.access_token);
+  try{
+    const pa=(await a.callTool({name:'get_profile',arguments:{}})).structuredContent;
+    const pb=(await b.callTool({name:'get_profile',arguments:{}})).structuredContent;
+    assert.notEqual(pa.id,pb.id);
+    assert.equal(pa.name,pb.name);
+  }finally{await a.close();await b.close();}
+});
+test('Chromium null-origin login needs same-origin navigation AND cookie and CSRF',async()=>{
+  const flow=await begin();
+  const good=await formPost(flow.login,{tenant:'ORIGIN',username:'test-user',password:'fake-password',csrf:flow.csrf},
+    {Cookie:flow.cookie,Origin:'null','Sec-Fetch-Site':'same-origin','Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'});
+  assert.equal(good.status,302);
+  const csp=good.headers.get('content-security-policy');
+  assert.match(csp,/form-action 'self' https:\/\/chatgpt.com/);
+  const fresh=await begin();
+  const bad=await formPost(fresh.login,{tenant:'BLOCK',username:'test-user',password:'fake-password',csrf:fresh.csrf},
+    {Cookie:fresh.cookie,Origin:'null','Sec-Fetch-Site':'cross-site','Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'});
+  assert.equal(bad.status,403);
+});
+test('revocation deletes newly isolated credentials',async()=>{
+  const tokens=await (await exchange(await authorize('ERASE'))).json();
+  const before=await connect(tokens.access_token);
+  const id=(await before.callTool({name:'get_profile',arguments:{}})).structuredContent.id;
+  await before.close();
+  assert.ok(service.auth.profile(id));
+  const revoked=await formPost(new URL('/revoke',base),{client_id:clientInfo.client_id,token:tokens.access_token});
+  assert.equal(revoked.status,200);
+  assert.throws(()=>service.auth.profile(id));
 });
