@@ -101,3 +101,6 @@ Certbot renueva el PEM original, pero la copia dentro del volumen Nginx **NO** s
 
 ## Alcance de esta documentación
 Este runbook describe la instalación observada y la versión GitHub de revisión. No certifica por sí mismo el cumplimiento legal ni prueba la configuración real actual del VPS. Toda publicación pública queda condicionada a la verificación operativa antes señalada.
+
+## Estado de validación de dependencias
+La rama de revisión usa Zod 4.6.7 junto con las versiones de dependencias resueltas por el gestor npm. Verificar el estado **actual** de la CI antes de desplegar; el script de remediación no se debe ejecutar automáticamente sobre producción.
