@@ -236,14 +236,54 @@ test('DCR rejects redirect impersonation and unapproved URL patterns',async()=>{
   }
 });
 
-test('write operations are denied by default even if consent checkbox is selected',async()=>{
+test('write tools remain disabled by server policy even when requested and consented',async()=>{
+  const localBase=new URL(`http://127.0.0.1:${await freePort()}`);
   const isolated=createApp({
-    publicUrl:new URL('https://isolated.example'),
-    arkUrl:new URL('https://ark.example/rest'),
-    redirects:new Set([callback]),
-    encryptionKey:randomBytes(32),dbPath:':memory:'
-  });
-  assert.equal(isolated.auth.origin.href,'https://isolated.example/');
-  assert.equal(isolated.app.get('trust proxy'),false);
-  isolated.close();
+    publicUrl:localBase,arkUrl:ark,
+    redirects:new Set([callback]),encryptionKey:randomBytes(32),
+    dbPath:':memory:',allowLocalHttp:true,
+    // Intentionally omit enableWrites: default must deny real writes.
+  },async()=>({nombre:'Solo lectura'}));
+  const socket=isolated.app.listen(Number(localBase.port),'127.0.0.1');
+  await new Promise(resolve=>socket.once('listening',resolve));
+  let connected;
+  try{
+    const registration=await jsonPost(new URL('/register',localBase),
+      {redirect_uris:[callback],token_endpoint_auth_method:'none',
+       grant_types:['authorization_code','refresh_token'],response_types:['code']});
+    assert.equal(registration.status,201);
+    const client=await registration.json();
+    const verifier=randomBytes(40).toString('base64url');
+    const challenge=createHash('sha256').update(verifier).digest('base64url');
+    const authorizeUrl=new URL('/authorize',localBase);
+    authorizeUrl.search=new URLSearchParams({response_type:'code',client_id:client.client_id,
+      redirect_uri:callback,scope:read+' '+write,state:'readonly',
+      code_challenge:challenge,code_challenge_method:'S256',resource:new URL('/mcp',localBase).href}).toString();
+    const started=await fetch(authorizeUrl,{redirect:'manual'});
+    assert.equal(started.status,302);
+    const cookie=started.headers.get('set-cookie').split(';')[0];
+    const login=new URL(started.headers.get('location'),localBase);
+    const html=await (await fetch(login,{headers:{Cookie:cookie}})).text();
+    const csrf=html.match(/name="csrf" value="([^"]+)"/)[1];
+    const approved=await formPost(login,{tenant:'READONLY',username:'test-user',password:'fake-password',csrf,write:'yes'},
+      {Cookie:cookie,Origin:localBase.origin});
+    assert.equal(approved.status,302);
+    const code=new URL(approved.headers.get('location')).searchParams.get('code');
+    const tokenResponse=await formPost(new URL('/token',localBase),{
+      grant_type:'authorization_code',client_id:client.client_id,code,code_verifier:verifier,
+      redirect_uri:callback,resource:new URL('/mcp',localBase).href
+    });
+    assert.equal(tokenResponse.status,200);
+    const tokens=await tokenResponse.json();
+    assert.equal(tokens.scope,read);
+    connected=new Client({name:'no-write',version:'1.0.0'});
+    await connected.connect(new StreamableHTTPClientTransport(new URL('/mcp',localBase),
+      {requestInit:{headers:{Authorization:'Bearer '+tokens.access_token}}}));
+    const tools=(await connected.listTools()).tools.map(t=>t.name);
+    assert.ok(!tools.includes('ark_crear_compra'));
+  }finally{
+    if(connected)await connected.close();
+    await new Promise(resolve=>socket.close(resolve));
+    isolated.close();
+  }
 });
