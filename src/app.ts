@@ -13,7 +13,7 @@ import { createArkServer } from './tools.js';
 
 export interface Settings {
   publicUrl: URL; arkUrl: URL; redirects: Set<string>; encryptionKey: Buffer;
-  dbPath: string; allowLocalHttp?: boolean; trustProxyHops?: number;
+  dbPath: string; allowLocalHttp?: boolean; trustProxyHops?: number; enableWrites?: boolean;
 }
 const esc=(value:string)=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const equal=(a:string,b:string)=>{const left=Buffer.from(a),right=Buffer.from(b);return left.length===right.length&&timingSafeEqual(left,right);};
@@ -65,7 +65,7 @@ export function createApp(settings:Settings, verifyArk=async(config:ArkConfig)=>
     try {
       const config:ArkConfig={baseUrl:settings.arkUrl.href.replace(/\/$/,''),...input.data};
       const company=await verifyArk(config) as any;
-      const redirect=auth.complete(flow,config,typeof company?.nombre==='string'?company.nombre:'Clínica ARK',req.body.write==='yes');
+      const redirect=auth.complete(flow,config,typeof company?.nombre==='string'?company.nombre:'Clínica ARK',settings.enableWrites===true && req.body.write==='yes');
       res.clearCookie('ark_work_flow',{path:'/login',httpOnly:true,secure:settings.publicUrl.protocol==='https:',sameSite:'lax'});
       res.redirect(redirect);
     } catch {
