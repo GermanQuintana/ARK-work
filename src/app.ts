@@ -38,6 +38,9 @@ export function createApp(settings:Settings, verifyArk=async(config:ArkConfig)=>
     if(settings.publicUrl.protocol==='https:')res.set('Strict-Transport-Security','max-age=31536000');
     next();
   });
+  // Client registrations are shared across clinics; prevent unauthenticated
+  // bursts of registrations before calling the OAuth router.
+  app.use('/register',rateLimit({windowMs:15*60_000,limit:20,standardHeaders:'draft-8',legacyHeaders:false}));
   app.use(mcpAuthRouter({provider:auth,issuerUrl:settings.publicUrl,resourceServerUrl:auth.resource,scopesSupported:[READ,WRITE],resourceName:'ARK Work',clientRegistrationOptions:{clientSecretExpirySeconds:0}}));
   const loginLimit=rateLimit({windowMs:15*60_000,limit:15,standardHeaders:'draft-8',legacyHeaders:false});
   const getFlow=(req:Request)=>typeof req.query.flow==='string'?req.query.flow:'';
