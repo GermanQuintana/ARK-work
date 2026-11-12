@@ -40,3 +40,5 @@ jobs:
             git commit -m "deps: remediate audited runtime vulnerabilities"
             git push origin HEAD:security/multi-tenant-hardening-nov2026
           fi
+
+# Retry remediation after Zod v4 compatibility fix.
