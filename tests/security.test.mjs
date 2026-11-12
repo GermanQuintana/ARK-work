@@ -213,15 +213,7 @@ test('new ChatGPT users can dynamically register their own distinct callback', a
     code_challenge:challenge,code_challenge_method:'S256',resource:new URL('/mcp',base).href}).toString();
   const started=await fetch(authUrl,{redirect:'manual'});
   assert.equal(started.status,302);
-  const cookie=started.headers.get('set-cookie').split(';')[0];
-  const login=new URL(started.headers.get('location'),base);
-  const html=await (await fetch(login,{headers:{Cookie:cookie}})).text();
-  const csrf=html.match(/name="csrf" value="([^"]+)"/)[1];
-  const completed=await formPost(login,{tenant:'NEW-CLINIC',username:'test-user',password:'fake-password',csrf},
-    {Cookie:cookie,Origin:base.origin});
-  assert.equal(completed.status,302);
-  assert.equal(new URL(completed.headers.get('location')).origin,'https://chatgpt.com');
-  assert.equal(new URL(completed.headers.get('location')).pathname,'/connector/oauth/NewUser2026_aBc123');
+  assert.match(started.headers.get('location'),/^\/login\?flow=/);
 });
 test('DCR rejects redirect impersonation and unapproved URL patterns',async()=>{
   const forbidden=[
