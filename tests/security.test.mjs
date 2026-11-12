@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test, before, after } from 'node:test';
 import { randomBytes, createHash } from 'node:crypto';
-import { createServer } from 'node:http';
+import { createServer, request as httpRequest } from 'node:http';
 import { createServer as netServer } from 'node:net';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -165,15 +165,25 @@ test('same tenant and username never share a mutable OAuth profile',async()=>{
     assert.equal(pa.name,pb.name);
   }finally{await a.close();await b.close();}
 });
+// Use raw HTTP here: Node fetch sets Sec-Fetch-Mode=cors and cannot emulate
+// a browser form navigation, even when a caller supplies that header.
+const browserFormPost=(url,data,headers)=>new Promise((resolve,reject)=>{
+  const u=new URL(url);
+  const body=new URLSearchParams(data).toString();
+  const req=httpRequest(u,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','Content-Length':Buffer.byteLength(body),...headers}},res=>{
+    res.resume();res.on('end',()=>resolve({status:res.statusCode,headers:{get:key=>res.headers[key.toLowerCase()]}}));
+  });
+  req.on('error',reject);req.end(body);
+});
 test('Chromium null-origin login needs same-origin navigation AND cookie and CSRF',async()=>{
   const flow=await begin();
-  const good=await formPost(flow.login,{tenant:'ORIGIN',username:'test-user',password:'fake-password',csrf:flow.csrf},
+  const good=await browserFormPost(flow.login,{tenant:'ORIGIN',username:'test-user',password:'fake-password',csrf:flow.csrf},
     {Cookie:flow.cookie,Origin:'null','Sec-Fetch-Site':'same-origin','Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'});
   assert.equal(good.status,302);
   const csp=good.headers.get('content-security-policy');
   assert.match(csp,/form-action 'self' https:\/\/chatgpt.com/);
   const fresh=await begin();
-  const bad=await formPost(fresh.login,{tenant:'BLOCK',username:'test-user',password:'fake-password',csrf:fresh.csrf},
+  const bad=await browserFormPost(fresh.login,{tenant:'BLOCK',username:'test-user',password:'fake-password',csrf:fresh.csrf},
     {Cookie:fresh.cookie,Origin:'null','Sec-Fetch-Site':'cross-site','Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'});
   assert.equal(bad.status,403);
 });
