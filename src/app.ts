@@ -34,7 +34,7 @@ export function createApp(settings:Settings, verifyArk=async(config:ArkConfig)=>
   app.disable('x-powered-by');
   app.set('trust proxy',settings.trustProxyHops??false);
   app.use((_req,res,next)=>{
-    res.set({'Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"});
+    res.set({'Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://chatgpt.com; frame-ancestors 'none'; base-uri 'none'"});
     if(settings.publicUrl.protocol==='https:')res.set('Strict-Transport-Security','max-age=31536000');
     next();
   });
@@ -50,7 +50,13 @@ export function createApp(settings:Settings, verifyArk=async(config:ArkConfig)=>
   });
   app.post('/login',loginLimit,express.urlencoded({extended:false,limit:'8kb'}),async(req,res)=>{
     const flow=getFlow(req),pending=auth.pending(flow);
-    if(!pending||req.headers.origin!==settings.publicUrl.origin||!equal(hash(cookie(req)),pending.cookie)||typeof req.body.csrf!=='string'||!equal(req.body.csrf,pending.csrf)){res.status(403).send(page('Solicitud rechazada','<h1>Vuelve a conectar desde ChatGPT</h1>'));return;}
+    // Origin can be "null" on Chromium's same-origin form navigation. The
+    // fetch metadata check is additional; the opaque cookie + CSRF token remain mandatory.
+    const sameSiteNavigation = req.headers['sec-fetch-site']==='same-origin' &&
+      req.headers['sec-fetch-mode']==='navigate' && req.headers['sec-fetch-dest']==='document';
+    const permittedOrigin=req.headers.origin===settings.publicUrl.origin ||
+      (req.headers.origin==='null' && sameSiteNavigation);
+    if(!pending||!permittedOrigin||!equal(hash(cookie(req)),pending.cookie)||typeof req.body.csrf!=='string'||!equal(req.body.csrf,pending.csrf)){res.status(403).send(page('Solicitud rechazada','<h1>Vuelve a conectar desde ChatGPT</h1>'));return;}
     const input=z.object({tenant:z.string().trim().min(1).max(120),username:z.string().trim().min(1).max(160),password:z.string().min(1).max(512)}).safeParse(req.body);
     if(!input.success){res.status(400).send(page('Datos incompletos','<h1>Completa los datos de acceso</h1>'));return;}
     try {
