@@ -197,3 +197,49 @@ test('revocation deletes newly isolated credentials',async()=>{
   assert.equal(revoked.status,200);
   assert.throws(()=>service.auth.profile(id));
 });
+
+test('new ChatGPT users can dynamically register their own distinct callback', async()=>{
+  const additional='https://chatgpt.com/connector/oauth/NewUser2026_aBc123';
+  const response=await jsonPost(new URL('/register',base),
+    {redirect_uris:[additional],token_endpoint_auth_method:'none',
+      grant_types:['authorization_code','refresh_token'],response_types:['code']});
+  assert.equal(response.status,201);
+  const registered=await response.json();
+  const verifier=randomBytes(40).toString('base64url');
+  const challenge=createHash('sha256').update(verifier).digest('base64url');
+  const authUrl=new URL('/authorize',base);
+  authUrl.search=new URLSearchParams({response_type:'code',client_id:registered.client_id,
+    redirect_uri:additional,scope:read,state:'second-user',
+    code_challenge:challenge,code_challenge_method:'S256',resource:new URL('/mcp',base).href}).toString();
+  const started=await fetch(authUrl,{redirect:'manual'});
+  assert.equal(started.status,302);
+  const cookie=started.headers.get('set-cookie').split(';')[0];
+  const login=new URL(started.headers.get('location'),base);
+  const html=await (await fetch(login,{headers:{Cookie:cookie}})).text();
+  const csrf=html.match(/name="csrf" value="([^"]+)"/)[1];
+  const completed=await formPost(login,{tenant:'NEW-CLINIC',username:'test-user',password:'fake-password',csrf},
+    {Cookie:cookie,Origin:base.origin});
+  assert.equal(completed.status,302);
+  assert.equal(new URL(completed.headers.get('location')).origin,'https://chatgpt.com');
+  assert.equal(new URL(completed.headers.get('location')).pathname,'/connector/oauth/NewUser2026_aBc123');
+});
+test('DCR rejects redirect impersonation and unapproved URL patterns',async()=>{
+  const forbidden=[
+    'https://chatgpt.com.evil.example/connector/oauth/ValidToken123',
+    'https://evil.example/connector/oauth/ValidToken123',
+    'http://chatgpt.com/connector/oauth/ValidToken123',
+    'https://chatgpt.com:444/connector/oauth/ValidToken123',
+    'https://chatgpt.com/connector/oauth/ValidToken123?next=evil',
+    'https://chatgpt.com/connector/oauth/ValidToken123#fragment',
+    'https://chatgpt.com/connector/oauth/../evil',
+    'https://chatgpt.com/connector/oauth/',
+    'https://chatgpt.com/connector/oauth/ValidToken123/extra',
+    'https://user@chatgpt.com/connector/oauth/ValidToken123',
+    'https://chatgpt.com/oauth/ValidToken123/client.json',
+  ];
+  for(const uri of forbidden){
+    const response=await jsonPost(new URL('/register',base),
+      {redirect_uris:[uri],token_endpoint_auth_method:'none'});
+    assert.equal(response.status,400,uri);
+  }
+});
