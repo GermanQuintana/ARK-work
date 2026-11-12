@@ -13,7 +13,7 @@ import { createArkServer } from './tools.js';
 
 export interface Settings {
   publicUrl: URL; arkUrl: URL; redirects: Set<string>; encryptionKey: Buffer;
-  dbPath: string; allowLocalHttp?: boolean; trustProxyHops?: number;
+  dbPath: string; allowLocalHttp?: boolean; trustProxyHops?: number; enableWrites?: boolean;
 }
 const esc=(value:string)=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const equal=(a:string,b:string)=>{const left=Buffer.from(a),right=Buffer.from(b);return left.length===right.length&&timingSafeEqual(left,right);};
@@ -34,10 +34,13 @@ export function createApp(settings:Settings, verifyArk=async(config:ArkConfig)=>
   app.disable('x-powered-by');
   app.set('trust proxy',settings.trustProxyHops??false);
   app.use((_req,res,next)=>{
-    res.set({'Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"});
+    res.set({'Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://chatgpt.com; frame-ancestors 'none'; base-uri 'none'"});
     if(settings.publicUrl.protocol==='https:')res.set('Strict-Transport-Security','max-age=31536000');
     next();
   });
+  // Client registrations are shared across clinics; prevent unauthenticated
+  // bursts of registrations before calling the OAuth router.
+  app.use('/register',rateLimit({windowMs:15*60_000,limit:20,standardHeaders:'draft-8',legacyHeaders:false}));
   app.use(mcpAuthRouter({provider:auth,issuerUrl:settings.publicUrl,resourceServerUrl:auth.resource,scopesSupported:[READ,WRITE],resourceName:'ARK Work',clientRegistrationOptions:{clientSecretExpirySeconds:0}}));
   const loginLimit=rateLimit({windowMs:15*60_000,limit:15,standardHeaders:'draft-8',legacyHeaders:false});
   const getFlow=(req:Request)=>typeof req.query.flow==='string'?req.query.flow:'';
@@ -45,18 +48,24 @@ export function createApp(settings:Settings, verifyArk=async(config:ArkConfig)=>
   app.get('/login',(req,res)=>{
     const flow=getFlow(req),pending=auth.pending(flow);
     if(!pending||!equal(hash(cookie(req)),pending.cookie)){res.status(400).send(page('Acceso caducado','<h1>Vuelve a conectar desde ChatGPT</h1><p>Esta solicitud no es válida o ha caducado.</p>'));return;}
-    const wantsWrite=pending.params.scopes?.includes(WRITE);
+    const wantsWrite=settings.enableWrites===true && pending.params.scopes?.includes(WRITE);
     res.send(page('Conectar tu clínica',`<h1>Conectar tu clínica a ARK Work</h1><p>Vas a autorizar a ChatGPT a usar tu acceso a ARK.</p><p class="note">Destino de ARK: ${esc(settings.arkUrl.origin)}. Comprueba que este servidor es de confianza.</p><form method="post" action="/login?flow=${encodeURIComponent(flow)}"><input type="hidden" name="csrf" value="${esc(pending.csrf)}"><label>Código de empresa / clínica<input name="tenant" required maxlength="120" autocomplete="organization"></label><label>Usuario de ARK<input name="username" required maxlength="160" autocomplete="username"></label><label>Contraseña de ARK<input type="password" name="password" required maxlength="512" autocomplete="current-password"></label>${wantsWrite?'<label><input type="checkbox" name="write" value="yes"> Permitir compras, pedidos y comunicaciones, siempre con vista previa y confirmación.</label>':''}<p class="note">Las credenciales se verificarán con ARK y se guardarán cifradas en este servidor para mantener tu conexión. No se guardan historias clínicas aquí. Las consultas y los resultados que solicites se procesan en ChatGPT.</p><button>Comprobar y autorizar</button><p class="note">Puedes cancelar cerrando esta ventana. Para desconectar, revoca la conexión en ChatGPT.</p></form>`));
   });
   app.post('/login',loginLimit,express.urlencoded({extended:false,limit:'8kb'}),async(req,res)=>{
     const flow=getFlow(req),pending=auth.pending(flow);
-    if(!pending||req.headers.origin!==settings.publicUrl.origin||!equal(hash(cookie(req)),pending.cookie)||typeof req.body.csrf!=='string'||!equal(req.body.csrf,pending.csrf)){res.status(403).send(page('Solicitud rechazada','<h1>Vuelve a conectar desde ChatGPT</h1>'));return;}
+    // Origin can be "null" on Chromium's same-origin form navigation. The
+    // fetch metadata check is additional; the opaque cookie + CSRF token remain mandatory.
+    const sameSiteNavigation = req.headers['sec-fetch-site']==='same-origin' &&
+      req.headers['sec-fetch-mode']==='navigate' && req.headers['sec-fetch-dest']==='document';
+    const permittedOrigin=req.headers.origin===settings.publicUrl.origin ||
+      (req.headers.origin==='null' && sameSiteNavigation);
+    if(!pending||!permittedOrigin||!equal(hash(cookie(req)),pending.cookie)||typeof req.body.csrf!=='string'||!equal(req.body.csrf,pending.csrf)){res.status(403).send(page('Solicitud rechazada','<h1>Vuelve a conectar desde ChatGPT</h1>'));return;}
     const input=z.object({tenant:z.string().trim().min(1).max(120),username:z.string().trim().min(1).max(160),password:z.string().min(1).max(512)}).safeParse(req.body);
     if(!input.success){res.status(400).send(page('Datos incompletos','<h1>Completa los datos de acceso</h1>'));return;}
     try {
       const config:ArkConfig={baseUrl:settings.arkUrl.href.replace(/\/$/,''),...input.data};
       const company=await verifyArk(config) as any;
-      const redirect=auth.complete(flow,config,typeof company?.nombre==='string'?company.nombre:'Clínica ARK',req.body.write==='yes');
+      const redirect=auth.complete(flow,config,typeof company?.nombre==='string'?company.nombre:'Clínica ARK',settings.enableWrites===true && req.body.write==='yes');
       res.clearCookie('ark_work_flow',{path:'/login',httpOnly:true,secure:settings.publicUrl.protocol==='https:',sameSite:'lax'});
       res.redirect(redirect);
     } catch {
@@ -73,7 +82,7 @@ export function createApp(settings:Settings, verifyArk=async(config:ArkConfig)=>
     let transport:StreamableHTTPServerTransport|undefined;
     try {
       const profile=auth.profile(String(req.auth?.extra?.profileId));
-      server=createArkServer(profile.config,req.auth!.scopes.includes(WRITE));
+      server=createArkServer(profile.config,settings.enableWrites===true && req.auth!.scopes.includes(WRITE));
       server.registerTool('get_profile',{description:'Identifica el perfil de clínica de esta conexión.',inputSchema:{},outputSchema:{id:z.string(),name:z.string()},annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},_meta:{'openai/profile':true}},async()=>{
         const value={id:profile.id,name:profile.label};
         return {content:[{type:'text' as const,text:JSON.stringify(value)}],structuredContent:value};

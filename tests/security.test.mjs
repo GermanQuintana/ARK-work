@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test, before, after } from 'node:test';
 import { randomBytes, createHash } from 'node:crypto';
-import { createServer } from 'node:http';
+import { createServer, request as httpRequest } from 'node:http';
 import { createServer as netServer } from 'node:net';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -35,7 +35,7 @@ before(async()=>{
   await new Promise(r=>upstream.listen(0,'127.0.0.1',r));
   ark=new URL(`http://127.0.0.1:${upstream.address().port}/ark/rest`);
   base=new URL(`http://127.0.0.1:${await freePort()}`);
-  service=createApp({publicUrl:base,arkUrl:ark,encryptionKey:randomBytes(32),dbPath:':memory:',redirects:new Set([callback]),allowLocalHttp:true});
+  service=createApp({publicUrl:base,arkUrl:ark,encryptionKey:randomBytes(32),dbPath:':memory:',redirects:new Set([callback]),allowLocalHttp:true,enableWrites:true});
   listener=service.app.listen(Number(base.port),'127.0.0.1');
   await new Promise(r=>listener.once('listening',r));
   const response=await jsonPost(new URL('/register',base),{redirect_uris:[callback],token_endpoint_auth_method:'none',grant_types:['authorization_code','refresh_token'],response_types:['code']});
@@ -97,7 +97,7 @@ test('PKCE, audience and single-use authorization codes are enforced',async()=>{
   assert.equal((await exchange(flow)).status,200);
   assert.equal((await exchange(flow)).status,400);
 });
-test('two clinic connections cannot read each other and profiles survive reconnect',async()=>{
+test('clinic connections isolate data and get separate profiles on reconnect',async()=>{
   const a=await (await exchange(await authorize('A'))).json();
   const b=await (await exchange(await authorize('B'))).json();
   const ca=await connect(a.access_token),cb=await connect(b.access_token);
@@ -109,7 +109,7 @@ test('two clinic connections cannot read each other and profiles survive reconne
     assert.notEqual(pa.structuredContent.id,pb.structuredContent.id);
     const again=await (await exchange(await authorize('A'))).json();
     const cc=await connect(again.access_token);
-    try{assert.equal((await cc.callTool({name:'get_profile',arguments:{}})).structuredContent.id,pa.structuredContent.id);}finally{await cc.close();}
+    try{assert.notEqual((await cc.callTool({name:'get_profile',arguments:{}})).structuredContent.id,pa.structuredContent.id);}finally{await cc.close();}
   }finally{await ca.close();await cb.close();}
 });
 test('read-only consent hides writes; explicit write consent exposes preview tools',async()=>{
@@ -152,4 +152,138 @@ test('production settings refuse HTTP and missing redirect allowlists',()=>{
   const settings={publicUrl:new URL('http://127.0.0.1'),arkUrl:ark,dbPath:':memory:',encryptionKey:randomBytes(32),redirects:new Set([callback])};
   assert.throws(()=>createApp(settings),/HTTPS/);
   assert.throws(()=>createApp({...settings,publicUrl:new URL('https://work.example'),arkUrl:new URL('https://ark.example/rest'),redirects:new Set()}),/redirect/);
+});
+
+test('same tenant and username never share a mutable OAuth profile',async()=>{
+  const first=await (await exchange(await authorize('SHARED'))).json();
+  const second=await (await exchange(await authorize('SHARED'))).json();
+  const a=await connect(first.access_token),b=await connect(second.access_token);
+  try{
+    const pa=(await a.callTool({name:'get_profile',arguments:{}})).structuredContent;
+    const pb=(await b.callTool({name:'get_profile',arguments:{}})).structuredContent;
+    assert.notEqual(pa.id,pb.id);
+    assert.equal(pa.name,pb.name);
+  }finally{await a.close();await b.close();}
+});
+// Use raw HTTP here: Node fetch sets Sec-Fetch-Mode=cors and cannot emulate
+// a browser form navigation, even when a caller supplies that header.
+const browserFormPost=(url,data,headers)=>new Promise((resolve,reject)=>{
+  const u=new URL(url);
+  const body=new URLSearchParams(data).toString();
+  const req=httpRequest(u,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','Content-Length':Buffer.byteLength(body),...headers}},res=>{
+    res.resume();res.on('end',()=>resolve({status:res.statusCode,headers:{get:key=>res.headers[key.toLowerCase()]}}));
+  });
+  req.on('error',reject);req.end(body);
+});
+test('Chromium null-origin login needs same-origin navigation AND cookie and CSRF',async()=>{
+  const flow=await begin();
+  const good=await browserFormPost(flow.login,{tenant:'ORIGIN',username:'test-user',password:'fake-password',csrf:flow.csrf},
+    {Cookie:flow.cookie,Origin:'null','Sec-Fetch-Site':'same-origin','Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'});
+  assert.equal(good.status,302);
+  const csp=good.headers.get('content-security-policy');
+  assert.match(csp,/form-action 'self' https:\/\/chatgpt.com/);
+  const fresh=await begin();
+  const bad=await browserFormPost(fresh.login,{tenant:'BLOCK',username:'test-user',password:'fake-password',csrf:fresh.csrf},
+    {Cookie:fresh.cookie,Origin:'null','Sec-Fetch-Site':'cross-site','Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'});
+  assert.equal(bad.status,403);
+});
+test('revocation deletes newly isolated credentials',async()=>{
+  const tokens=await (await exchange(await authorize('ERASE'))).json();
+  const before=await connect(tokens.access_token);
+  const id=(await before.callTool({name:'get_profile',arguments:{}})).structuredContent.id;
+  await before.close();
+  assert.ok(service.auth.profile(id));
+  const revoked=await formPost(new URL('/revoke',base),{client_id:clientInfo.client_id,token:tokens.access_token});
+  assert.equal(revoked.status,200);
+  assert.throws(()=>service.auth.profile(id));
+});
+
+test('new ChatGPT users can dynamically register their own distinct callback', async()=>{
+  const additional='https://chatgpt.com/connector/oauth/NewUser2026_aBc123';
+  const response=await jsonPost(new URL('/register',base),
+    {redirect_uris:[additional],token_endpoint_auth_method:'none',
+      grant_types:['authorization_code','refresh_token'],response_types:['code']});
+  assert.equal(response.status,201);
+  const registered=await response.json();
+  const verifier=randomBytes(40).toString('base64url');
+  const challenge=createHash('sha256').update(verifier).digest('base64url');
+  const authUrl=new URL('/authorize',base);
+  authUrl.search=new URLSearchParams({response_type:'code',client_id:registered.client_id,
+    redirect_uri:additional,scope:read,state:'second-user',
+    code_challenge:challenge,code_challenge_method:'S256',resource:new URL('/mcp',base).href}).toString();
+  const started=await fetch(authUrl,{redirect:'manual'});
+  assert.equal(started.status,302);
+  assert.match(started.headers.get('location'),/^\/login\?flow=/);
+});
+test('DCR rejects redirect impersonation and unapproved URL patterns',async()=>{
+  const forbidden=[
+    'https://chatgpt.com.evil.example/connector/oauth/ValidToken123',
+    'https://evil.example/connector/oauth/ValidToken123',
+    'http://chatgpt.com/connector/oauth/ValidToken123',
+    'https://chatgpt.com:444/connector/oauth/ValidToken123',
+    'https://chatgpt.com/connector/oauth/ValidToken123?next=evil',
+    'https://chatgpt.com/connector/oauth/ValidToken123#fragment',
+    'https://chatgpt.com/connector/oauth/../evil',
+    'https://chatgpt.com/connector/oauth/',
+    'https://chatgpt.com/connector/oauth/ValidToken123/extra',
+    'https://user@chatgpt.com/connector/oauth/ValidToken123',
+    'https://chatgpt.com/oauth/ValidToken123/client.json',
+  ];
+  for(const uri of forbidden){
+    const response=await jsonPost(new URL('/register',base),
+      {redirect_uris:[uri],token_endpoint_auth_method:'none'});
+    assert.equal(response.status,400,uri);
+  }
+});
+
+test('write tools remain disabled by server policy even when requested and consented',async()=>{
+  const localBase=new URL(`http://127.0.0.1:${await freePort()}`);
+  const isolated=createApp({
+    publicUrl:localBase,arkUrl:ark,
+    redirects:new Set([callback]),encryptionKey:randomBytes(32),
+    dbPath:':memory:',allowLocalHttp:true,
+    // Intentionally omit enableWrites: default must deny real writes.
+  },async()=>({nombre:'Solo lectura'}));
+  const socket=isolated.app.listen(Number(localBase.port),'127.0.0.1');
+  await new Promise(resolve=>socket.once('listening',resolve));
+  let connected;
+  try{
+    const registration=await jsonPost(new URL('/register',localBase),
+      {redirect_uris:[callback],token_endpoint_auth_method:'none',
+       grant_types:['authorization_code','refresh_token'],response_types:['code']});
+    assert.equal(registration.status,201);
+    const client=await registration.json();
+    const verifier=randomBytes(40).toString('base64url');
+    const challenge=createHash('sha256').update(verifier).digest('base64url');
+    const authorizeUrl=new URL('/authorize',localBase);
+    authorizeUrl.search=new URLSearchParams({response_type:'code',client_id:client.client_id,
+      redirect_uri:callback,scope:read+' '+write,state:'readonly',
+      code_challenge:challenge,code_challenge_method:'S256',resource:new URL('/mcp',localBase).href}).toString();
+    const started=await fetch(authorizeUrl,{redirect:'manual'});
+    assert.equal(started.status,302);
+    const cookie=started.headers.get('set-cookie').split(';')[0];
+    const login=new URL(started.headers.get('location'),localBase);
+    const html=await (await fetch(login,{headers:{Cookie:cookie}})).text();
+    const csrf=html.match(/name="csrf" value="([^"]+)"/)[1];
+    const approved=await formPost(login,{tenant:'READONLY',username:'test-user',password:'fake-password',csrf,write:'yes'},
+      {Cookie:cookie,Origin:localBase.origin});
+    assert.equal(approved.status,302);
+    const code=new URL(approved.headers.get('location')).searchParams.get('code');
+    const tokenResponse=await formPost(new URL('/token',localBase),{
+      grant_type:'authorization_code',client_id:client.client_id,code,code_verifier:verifier,
+      redirect_uri:callback,resource:new URL('/mcp',localBase).href
+    });
+    assert.equal(tokenResponse.status,200);
+    const tokens=await tokenResponse.json();
+    assert.equal(tokens.scope,read);
+    connected=new Client({name:'no-write',version:'1.0.0'});
+    await connected.connect(new StreamableHTTPClientTransport(new URL('/mcp',localBase),
+      {requestInit:{headers:{Authorization:'Bearer '+tokens.access_token}}}));
+    const tools=(await connected.listTools()).tools.map(t=>t.name);
+    assert.ok(!tools.includes('ark_crear_compra'));
+  }finally{
+    if(connected)await connected.close();
+    await new Promise(resolve=>socket.close(resolve));
+    isolated.close();
+  }
 });
