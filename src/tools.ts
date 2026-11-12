@@ -1440,7 +1440,7 @@ server.registerTool(
     description:
       "Emite (envía) un pedido a proveedor ya creado (ESCRIBE en producción). La vista previa muestra tienda y terminal; para ejecutar exige centroEsperado coincidente y confirmar=true. Se le pasa el objeto del pedido obtenido de ark_ficha_pedido.",
     inputSchema: {
-      pedido: z.record(z.any()).describe("Objeto del pedido a emitir (de ark_ficha_pedido)"),
+      pedido: z.record(z.string(),z.any()).describe("Objeto del pedido a emitir (de ark_ficha_pedido)"),
       ...ctxEscritura,
     },
   },
