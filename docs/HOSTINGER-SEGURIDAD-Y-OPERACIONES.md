@@ -104,3 +104,43 @@ Este runbook describe la instalación observada y la versión GitHub de revisió
 
 ## Estado de validación de dependencias
 La rama de revisión usa Zod 4.6.7 junto con las versiones de dependencias resueltas por el gestor npm. Verificar el estado **actual** de la CI antes de desplegar; el script de remediación no se debe ejecutar automáticamente sobre producción.
+
+
+## Registro automático de nuevas cuentas ChatGPT (beta)
+En la rama de distribución, el registro dinámico OAuth admite callbacks en el formato
+`https://chatgpt.com/connector/oauth/{callback_id}`, con un ID alfanumérico limitado,
+además de la URI exacta configurada por el administrador. Otros hosts, puertos, query
+strings y fragmentos son rechazados. En cada solicitud de autorización se exige que
+la URI de retorno figure en el registro del **mismo cliente OAuth**. El registro
+de clientes tiene limitación de frecuencia y cada usuario debe autenticar ARK y
+confirmar permisos por separado. No admitir comodines `*` en dominios.
+
+**La beta se distribuye de forma individual**, dando a un veterinario autorizado el
+manual [Instalar ARK Work](INSTALAR-ARK-WORK.md). No implica estar publicado en el
+directorio de ChatGPT. Hasta que esa publicación se apruebe, el usuario necesita
+una cuenta que permita MCP personalizados.
+
+### Regla adicional de escritura
+La nueva versión requiere `WORK_ENABLE_WRITES=true` **y** el consentimiento
+`ark:write` para exponer las herramientas de escritura. Si no se define
+esa variable, **todas las conexiones son de solo lectura**, incluso si antes
+se había autorizado `ark:write`. Mantenerla sin definir durante beta externa.
+Esta regla es distinta de la futura confirmación transaccional y no debe
+interpretarse como autorización para activar escrituras indiscriminadamente.
+
+### Actualizar la instalación actual sin borrar SQLite
+La rama contiene cambios respecto de `main`, mientras que en Hostinger se
+editaron localmente `src/app.ts`, `compose.vps.yaml`, nginx y `.env`.
+Se recomienda no hacer `git reset --hard` ni `docker compose down -v`.
+Para preparar el despliegue:
+```bash
+cd /opt/mcp-ark/ARK-work
+git status --short
+docker compose -f compose.vps.yaml config --quiet
+docker compose -f compose.vps.yaml ps
+git fetch origin security/multi-tenant-hardening-nov2026
+git diff --stat HEAD origin/security/multi-tenant-hardening-nov2026
+```
+Guardar las diferencias, ejecutar pruebas y levantar staging antes de sustituir
+la imagen productiva. Conservar exactamente la clave de cifrado de producción.
+No introducir `WORK_ENABLE_WRITES=true` en beta.
