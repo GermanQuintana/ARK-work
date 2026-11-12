@@ -82,7 +82,7 @@ export function createApp(settings:Settings, verifyArk=async(config:ArkConfig)=>
     let transport:StreamableHTTPServerTransport|undefined;
     try {
       const profile=auth.profile(String(req.auth?.extra?.profileId));
-      server=createArkServer(profile.config,req.auth!.scopes.includes(WRITE));
+      server=createArkServer(profile.config,settings.enableWrites===true && req.auth!.scopes.includes(WRITE));
       server.registerTool('get_profile',{description:'Identifica el perfil de clínica de esta conexión.',inputSchema:{},outputSchema:{id:z.string(),name:z.string()},annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},_meta:{'openai/profile':true}},async()=>{
         const value={id:profile.id,name:profile.label};
         return {content:[{type:'text' as const,text:JSON.stringify(value)}],structuredContent:value};
