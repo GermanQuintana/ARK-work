@@ -35,7 +35,7 @@ before(async()=>{
   await new Promise(r=>upstream.listen(0,'127.0.0.1',r));
   ark=new URL(`http://127.0.0.1:${upstream.address().port}/ark/rest`);
   base=new URL(`http://127.0.0.1:${await freePort()}`);
-  service=createApp({publicUrl:base,arkUrl:ark,encryptionKey:randomBytes(32),dbPath:':memory:',redirects:new Set([callback]),allowLocalHttp:true});
+  service=createApp({publicUrl:base,arkUrl:ark,encryptionKey:randomBytes(32),dbPath:':memory:',redirects:new Set([callback]),allowLocalHttp:true,enableWrites:true});
   listener=service.app.listen(Number(base.port),'127.0.0.1');
   await new Promise(r=>listener.once('listening',r));
   const response=await jsonPost(new URL('/register',base),{redirect_uris:[callback],token_endpoint_auth_method:'none',grant_types:['authorization_code','refresh_token'],response_types:['code']});
@@ -234,4 +234,16 @@ test('DCR rejects redirect impersonation and unapproved URL patterns',async()=>{
       {redirect_uris:[uri],token_endpoint_auth_method:'none'});
     assert.equal(response.status,400,uri);
   }
+});
+
+test('write operations are denied by default even if consent checkbox is selected',async()=>{
+  const isolated=createApp({
+    publicUrl:new URL('https://isolated.example'),
+    arkUrl:new URL('https://ark.example/rest'),
+    redirects:new Set([callback]),
+    encryptionKey:randomBytes(32),dbPath:':memory:'
+  });
+  assert.equal(isolated.auth.origin.href,'https://isolated.example/');
+  assert.equal(isolated.app.get('trust proxy'),false);
+  isolated.close();
 });
