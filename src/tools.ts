@@ -107,7 +107,7 @@ function fail(err: unknown): ToolResult {
   const msg =
     err instanceof ArkError
       ? `Error ARK (${err.status}): no se pudo completar la operación.`
-      : `Error: ${(err as Error)?.message ?? String(err)}`;
+      : 'Error interno de la operación. Consulta los registros técnicos sin datos sensibles.';
   return { content: [{ type: "text", text: msg }], isError: true };
 }
 
