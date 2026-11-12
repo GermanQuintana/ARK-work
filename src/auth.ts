@@ -8,6 +8,20 @@ import { Store, opaque, hash } from './store.js';
 
 export const READ = 'ark:read';
 export const WRITE = 'ark:write';
+
+// ChatGPT creates a unique callback for each personal MCP registration.
+// Accept only exact, well-formed OpenAI callbacks. Never allow arbitrary
+// redirect origins, query strings, fragments, ports or lookalike domains.
+export function allowedChatGptRedirect(uri:string, configured:Set<string>):boolean {
+  if(configured.has(uri)) return true;
+  if(!/^https:\/\/chatgpt\.com\/connector\/oauth\/[A-Za-z0-9_-]{8,128}$/.test(uri)) return false;
+  try {
+    const url=new URL(uri);
+    return url.origin==='https://chatgpt.com' && !url.search && !url.hash &&
+      !url.username && !url.password && url.port==='';
+  }catch{return false;}
+}
+
 export interface Profile { id: string; config: ArkConfig; label: string }
 export interface Pending { client: OAuthClientInformationFull; params: AuthorizationParams; csrf: string; cookie: string }
 interface Grant { client: string; profile: string; scopes: string[]; challenge: string; redirect: string; resource: string }
@@ -20,7 +34,7 @@ export class WorkAuth implements OAuthServerProvider {
     this.clientsStore = {
       getClient: async id => store.get<OAuthClientInformationFull>('client',id),
       registerClient: async input => {
-        if (!input.redirect_uris.length || input.redirect_uris.some(uri => !redirects.has(uri))) throw new InvalidClientMetadataError('Redirect URI not allowed');
+        if (!input.redirect_uris.length || input.redirect_uris.length>3 || input.redirect_uris.some(uri => !allowedChatGptRedirect(uri,redirects))) throw new InvalidClientMetadataError('Redirect URI not allowed');
         if (input.token_endpoint_auth_method && !['none','client_secret_post'].includes(input.token_endpoint_auth_method)) throw new InvalidClientMetadataError('Use none or client_secret_post');
         const client = {...input, client_id:opaque(),client_id_issued_at:Math.floor(Date.now()/1000),client_secret_expires_at:0};
         store.put('client',client.client_id,client);
@@ -39,7 +53,7 @@ export class WorkAuth implements OAuthServerProvider {
     this.checkResource(params.resource);
     params.scopes = params.scopes?.length ? params.scopes : [READ];
     this.checkScopes(params.scopes);
-    if (!this.redirects.has(params.redirectUri)) throw new InvalidClientMetadataError('Redirect not allowed');
+    if (!allowedChatGptRedirect(params.redirectUri,this.redirects) || !client.redirect_uris.includes(params.redirectUri)) throw new InvalidClientMetadataError('Redirect not allowed for client');
     const flow=opaque(), cookie=opaque(), csrf=opaque();
     this.store.put('pending',hash(flow),{client,params:{...params,resource:params.resource?.href},cookie:hash(cookie),csrf},Date.now()+10*60_000);
     res.cookie('ark_work_flow',cookie,{httpOnly:true,secure:this.origin.protocol==='https:',sameSite:'lax',path:'/login',maxAge:10*60_000});
