@@ -8,7 +8,7 @@ Versión web de la integración con ARK Gestión Veterinaria para **ChatGPT Work
 
 - Reutiliza las 39 herramientas del plugin local [ark-vet](https://github.com/GermanQuintana/ark-vet), con contexto de clínica aislado por conexión. Añade `get_profile` para identificar el perfil autenticado.
 - Cada usuario se conecta con el código de empresa, usuario y contraseña de su ARK en una pantalla HTTPS del servicio; no los escribe en el chat.
-- Permite consentir solo lectura (34 herramientas contando perfil) o lectura y escritura (40 herramientas). Compras, pedidos y comunicaciones mantienen vista previa y confirmación expresa; el permiso OAuth no sustituye la confirmación de cada operación.
+- Permite consentir solo lectura (39 herramientas contando perfil) o lectura y escritura (48 herramientas). Compras, pedidos y comunicaciones mantienen vista previa y confirmación expresa; el permiso OAuth no sustituye la confirmación de cada operación.
 - Guarda credenciales y registros OAuth cifrados con AES-256-GCM en SQLite; los tokens opacos se buscan por hash. No almacena historias clínicas ni documentos consultados en su base de datos. Los resultados solicitados viajan a ChatGPT.
 - Usa sesiones MCP sin estado: cada petición crea un cliente ARK exclusivo para el perfil autenticado. Ninguna herramienta acepta un tenant o contraseña para cambiar de conexión.
 
@@ -80,3 +80,7 @@ La skill **Precios proveedores** (`$precios-proveedores`) revisa PDF, imágenes 
 El MCP actual no incorpora edición de artículos existentes. Si hay navegador accesible con ARK en el mismo centro y permisos adecuados, la skill puede aplicar allí los cambios tras confirmarlos y contrastar el resultado con el MCP. Si no hay vía de edición, entrega la propuesta pendiente sin afirmar que está aplicada. No se crean compras ni entradas de stock para simular una edición de precios. No se incluyen datos reales ni credenciales en esta mejora.
 
 ARK Work sigue requiriendo despliegue y registro del servicio remoto. La skill no proporciona control del equipo a una sesión web que carezca de esa capacidad. Versión del paquete de skills: 0.1.1; servidor sin cambios.
+
+## Facturas de proveedor e historiales
+
+El circuito completo de conciliación de albaranes, anotación de condiciones, vencimientos, pagos y edición de visitas existentes se describe en [FACTURAS-PROVEEDORES-Y-ESCRITURA.md](docs/FACTURAS-PROVEEDORES-Y-ESCRITURA.md). Requiere desplegar esta versión y autorizar escritura; disponer de una skill no activa el servidor.

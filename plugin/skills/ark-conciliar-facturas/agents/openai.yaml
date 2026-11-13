@@ -1,0 +1,4 @@
+interface:
+  display_name: "ARK: facturas y pagos a proveedores"
+  short_description: "Cruza facturas con albaranes, vencimientos y pagos"
+  default_prompt: "Usa $ark-conciliar-facturas para revisar esta factura de proveedor, comprobar albaranes y preparar sus vencimientos y pagos."

@@ -3,12 +3,13 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { ArkClient, ArkError, type ArkConfig } from './arkClient.js';
 import { construirCompra, type EntradaCompra } from './compra.js';
+import { registerExtendedTools, EXTENDED_WRITE_TOOLS } from './extendedTools.js';
 
 export function createArkServer(config: ArkConfig, allowWrites = false) {
 const client = new ArkClient(config);
 const writeCtx = { username: config.username, idTerminal: undefined as number | undefined, idEmpleado: undefined as number | undefined };
 const server = new McpServer(
-  { name: "ark-work", version: "0.1.0" },
+  { name: "ark-work", version: "0.2.0" },
   {
     instructions:
       "ARK contiene datos reales de producción. Las consultas son de solo lectura. " +
@@ -19,6 +20,7 @@ const server = new McpServer(
 );
 
 const WRITE_TOOLS = new Set([
+  ...EXTENDED_WRITE_TOOLS,
   "ark_enviar_recordatorios_email",
   "ark_crear_pedido",
   "ark_emitir_pedido",
@@ -1611,5 +1613,6 @@ server.registerTool(
 );
 
 
+registerExtendedTools(server, client);
 return server;
 }
