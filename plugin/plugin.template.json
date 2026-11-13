@@ -1,6 +1,6 @@
 {
   "name": "ark-work",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "ARK Gestión Veterinaria para ChatGPT Work mediante MCP remoto autenticado.",
   "author": {
     "name": "Germán Quintana"
@@ -12,7 +12,7 @@
       "onboardingSkill": "./skills/setup/SKILL.md",
       "interface": {
         "displayName": "ARK Work",
-        "shortDescription": "Consultas, compras y revisión de tarifas en ARK",
+        "shortDescription": "Clínica, compras, facturas y pagos de proveedores en ARK",
         "developerName": "Germán Quintana",
         "category": "Productivity",
         "capabilities": [
@@ -23,7 +23,8 @@
           "Conecta mi clínica a ARK Work.",
           "Consulta las existencias de este artículo.",
           "Prepara este albarán como compra en el centro indicado.",
-          "Revisa esta tarifa y prepara los cambios para confirmar."
+          "Revisa esta tarifa y prepara los cambios para confirmar.",
+          "Comprueba los albaranes, vencimientos y pagos de esta factura de proveedor."
         ]
       }
     }

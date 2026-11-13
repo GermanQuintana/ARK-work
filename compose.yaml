@@ -7,6 +7,7 @@ services:
       WORK_ENCRYPTION_KEY: ${WORK_ENCRYPTION_KEY:?Set WORK_ENCRYPTION_KEY}
       OAUTH_REDIRECT_URIS: ${OAUTH_REDIRECT_URIS:?Set exact OAUTH_REDIRECT_URIS}
       ARK_BASE_URL: ${ARK_BASE_URL:-https://ark.gestionveterinariaark.es/ark/rest}
+      WORK_ENABLE_WRITES: ${WORK_ENABLE_WRITES:-false}
     volumes:
       - ark-data:/app/data
   https:

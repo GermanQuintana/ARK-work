@@ -104,3 +104,7 @@ Cuando una línea del albarán no tenga ficha en ARK, decide según **qué tipo 
 - Responde en español y en lenguaje natural; no vuelques JSON salvo que lo pidan.
 - Importes en euros. Fechas legibles. Distingue claramente **lo que nos deben** (clientes) de **lo que debemos** (proveedores).
 - Al mostrar una vista previa de escritura, deja muy claro que **aún no se ha guardado nada**.
+
+## Facturas que agrupan albaranes, vencimientos y pagos
+
+Usar `ark-conciliar-facturas` cuando se aporte una factura para comprobar los albaranes ya registrados, forma de pago, vencimientos o pago. No crear otra compra por el total de una factura si sus albaranes ya han entrado en stock. Consultar pagos a proveedores con `ark_buscar_pago_proveedor` y distinguirlos de cobros de clientes. Un vencimiento o domiciliación no acreditan pago. Registrar únicamente un asiento justificado o un pago previsto claramente identificado y verificar el resultado.

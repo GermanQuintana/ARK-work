@@ -118,7 +118,12 @@ test('read-only consent hides writes; explicit write consent exposes preview too
   const ca=await connect(a.access_token),cb=await connect(b.access_token);
   try{
     const ta=(await ca.listTools()).tools,tb=(await cb.listTools()).tools;
-    assert.equal(ta.length,34);assert.equal(tb.length,40);
+    const writes=['ark_enviar_recordatorios_email','ark_crear_pedido','ark_emitir_pedido','ark_crear_compra',
+      'ark_crear_compra_desde_documento','ark_crear_articulos_desde_documento',
+      'ark_anotar_factura_proveedor','ark_registrar_pago_proveedor','ark_actualizar_visita'];
+    assert.ok(ta.every(t=>t.annotations.readOnlyHint===true));
+    assert.deepEqual(tb.filter(t=>!t.annotations.readOnlyHint).map(t=>t.name).sort(),writes.sort());
+    assert.equal(tb.length,ta.length+writes.length);
     assert.ok(!ta.some(t=>t.name==='ark_crear_compra'));
     assert.ok(tb.some(t=>t.name==='ark_crear_compra'&&t.annotations.readOnlyHint===false));
     assert.equal((await ca.callTool({name:'ark_crear_compra',arguments:{confirmar:true}})).isError,true);
@@ -281,6 +286,8 @@ test('write tools remain disabled by server policy even when requested and conse
       {requestInit:{headers:{Authorization:'Bearer '+tokens.access_token}}}));
     const tools=(await connected.listTools()).tools.map(t=>t.name);
     assert.ok(!tools.includes('ark_crear_compra'));
+    assert.ok(!tools.includes('ark_registrar_pago_proveedor'));
+    assert.ok(!tools.includes('ark_actualizar_visita'));
   }finally{
     if(connected)await connected.close();
     await new Promise(resolve=>socket.close(resolve));
