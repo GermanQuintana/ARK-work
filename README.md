@@ -2,7 +2,7 @@
 
 Versión web de la integración con ARK Gestión Veterinaria para **ChatGPT Work**. Servidor MCP remoto por HTTPS, OAuth con PKCE y skills de clínica, almacén y compras. No requiere Node.js en el ordenador de cada usuario.
 
-**Estado: código preparado y probado con un ARK simulado. Todavía no existe un endpoint público desplegado ni un plugin web registrado. Este repositorio por sí solo no instala una conexión funcional en ChatGPT.**
+**El paquete y el servidor están en la versión 0.2.1.** Comprueba la versión que ejecuta tu VPS en `/healthz`. La actualización de GitHub requiere un despliegue en el servidor antes de aparecer en las herramientas de ChatGPT.
 
 ## Qué hace
 
@@ -17,7 +17,7 @@ Versión web de la integración con ARK Gestión Veterinaria para **ChatGPT Work
 1. Instalar **ARK Work** desde el enlace del plugin o el catálogo compartido disponible para su cuenta.
 2. Pulsar **Conectar** y completar la autorización HTTPS con su acceso a ARK. Puede autorizar solo consultas o marcar el permiso para compras, pedidos y comunicaciones.
 3. Abrir un chat de Work, mencionar el plugin y pedir «Consulta mi empresa y los centros disponibles».
-4. Pedir consultas o adjuntar un albarán y solicitar «Usa la skill de compras y prepara este albarán para el centro [nombre]».
+4. Pedir consultas o adjuntar un albarán y solicitar «Usa la skill de compras y prepara este albarán para el centro [nombre]». La vista previa debe mostrar la cantidad y el precio en la unidad de compra del proveedor. ARK convierte a unidades de venta internamente.
 
 Instalar el repositorio desde una conversación web no despliega el servidor. El registro del MCP y la distribución del plugin dependen de los controles disponibles en la cuenta o workspace de ChatGPT.
 
@@ -79,7 +79,7 @@ La skill **Precios proveedores** (`$precios-proveedores`) revisa PDF, imágenes 
 
 El MCP actual no incorpora edición de artículos existentes. Si hay navegador accesible con ARK en el mismo centro y permisos adecuados, la skill puede aplicar allí los cambios tras confirmarlos y contrastar el resultado con el MCP. Si no hay vía de edición, entrega la propuesta pendiente sin afirmar que está aplicada. No se crean compras ni entradas de stock para simular una edición de precios. No se incluyen datos reales ni credenciales en esta mejora.
 
-ARK Work sigue requiriendo despliegue y registro del servicio remoto. La skill no proporciona control del equipo a una sesión web que carezca de esa capacidad. Versión del paquete de skills: 0.1.1; servidor sin cambios.
+ARK Work sigue requiriendo despliegue y registro del servicio remoto. La skill no proporciona control del equipo a una sesión web que carezca de esa capacidad. El paquete de skills se distribuye junto al servidor con la misma versión.
 
 ## Facturas de proveedor e historiales
 

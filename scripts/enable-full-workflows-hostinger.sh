@@ -2,7 +2,7 @@
 # Upgrade ARK Work only. Keep production .env, volumes and the shared proxy.
 set -euo pipefail
 project_dir="${1:-/opt/mcp-ark/ARK-work}"
-release_ref="feat/facturas-proveedores-y-escritura"
+release_ref="main"
 compose_file="$project_dir/compose.vps.yaml"
 override="/root/ark-work-full.override.yaml"
 rollback="/root/ark-work-full.rollback.yaml"
@@ -44,7 +44,7 @@ test "$("${compose[@]}" exec -T ark-work printenv WORK_ENABLE_WRITES)" = true
 # Network may still be starting. The health response must identify ARK Work.
 for attempt in 1 2 3 4 5; do
   if "${compose[@]}" exec -T ark-work node --input-type=module -e \
-    'const r=await fetch("http://127.0.0.1:8787/healthz",{headers:{Host:new URL(process.env.PUBLIC_URL).host}});if(!r.ok)process.exit(1);const b=await r.json();if(b.service!=="ark-work"||b.status!=="ok"||b.version!=="0.2.0")process.exit(1);'; then
+    'import {readFileSync} from "node:fs";const r=await fetch("http://127.0.0.1:8787/healthz",{headers:{Host:new URL(process.env.PUBLIC_URL).host}});if(!r.ok)process.exit(1);const b=await r.json();const {version}=JSON.parse(readFileSync("package.json","utf8"));if(b.service!=="ark-work"||b.status!=="ok"||b.version!==version)process.exit(1);'; then
     echo 'ARK Work actualizado. Escritura habilitada; cada conexión necesita autorización OAuth de escritura.'
     echo "Usar siempre el override persistente $override en futuras recreaciones."
     echo "Si hace falta revertir: docker compose --project-name ark-work --project-directory $project_dir -f $compose_file -f $rollback up -d --no-deps --no-build ark-work"

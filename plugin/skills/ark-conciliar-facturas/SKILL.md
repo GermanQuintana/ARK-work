@@ -24,7 +24,7 @@ Trabajar con el centro conectado mediante ARK Work o ARK Gestión Veterinaria. D
 - Usar `ark_conciliar_factura_proveedor` cuando esté disponible, pasándole las compras candidatas completas mediante sus ids y la factura extraída. Sin esa herramienta, realizar el mismo cruce con las consultas existentes.
 - Exponer una tabla: albarán, compra ARK, centro, importe factura, importe ARK, pendiente y resultado. Informar si la cobertura de búsqueda o la lista de albaranes es incompleta.
 - Comprobar duplicados, compras anuladas, importes, IVA, descuentos, portes y abonos. No cerrar diferencias como «redondeo» sin explicarlas. No afirmar «todo coincide» si faltan totales o referencias.
-- Si los albaranes ya están registrados, NO crear otra compra por el total de la factura: duplicaría stock y deuda. Si falta alguno, preparar solo su entrada con las herramientas de compras existentes; necesitar sus líneas y trazabilidad, sin inventarlas.
+- Si los albaranes ya están registrados, NO crear otra compra por el total de la factura: duplicaría stock y deuda. Si falta alguno, preparar solo su entrada con las herramientas de compras existentes; necesitar sus líneas y trazabilidad, sin inventarlas. Sigue `ark-compras`: conserva cantidad, precio sin IVA y descuentos en la unidad de compra impresa por el proveedor. Una caja de 15 comprimidos se registra como 1 caja, al precio por caja. ARK realiza la conversión a unidades de venta. Verifica también las cantidades por lote en esa misma unidad y compara cada línea con el original antes de confirmar.
 
 ## 3. Revisar forma de pago y vencimientos
 

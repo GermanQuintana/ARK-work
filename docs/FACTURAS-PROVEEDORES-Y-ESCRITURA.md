@@ -6,7 +6,7 @@ Esta versión conserva las funciones anteriores y añade ocho herramientas: conc
 
 1. Aportar PDF/foto en ChatGPT. Extraer proveedor, referencias completas, importes, forma de pago y vencimientos.
 2. Buscar todas las compras relevantes, incluidas las pagadas, y cruzar las referencias del proveedor. El número interno de ARK no es el del albarán. `ark_conciliar_factura_proveedor` recibe los ids candidatos encontrados; no hace una búsqueda exhaustiva por sí sola y señala ese alcance.
-3. Revisar duplicados, faltantes, abonos, impuestos y totales. No crear una compra adicional por la factura si las entradas de sus albaranes ya existen.
+3. Revisar duplicados, faltantes, abonos, impuestos y totales. No crear una compra adicional por la factura si las entradas de sus albaranes ya existen. Al dar entrada a un albarán, conservar cantidad, precio sin IVA y descuentos en la unidad de compra del proveedor. Una caja de 15 comprimidos se registra como 1 caja al precio por caja. ARK convierte a unidades de venta internamente.
 4. Consultar pagos y vencimientos. `ark_anotar_factura_proveedor` conserva el albarán y añade la factura y sus condiciones a las observaciones del documento proveedor. No adjunta el PDF, no crea factura agrupada nativa ni liquida la deuda.
 5. Registrar un pago realizado con evidencia o confirmación concreta de fecha/importe. Un recibo o pagaré previsto lleva vencimiento y permanece identificado como previsto. Esta versión no implementa la verificación posterior de un recibo/pagaré existente: hacerlo en ARK, sin crear otro pago.
 6. La vista previa incluye centro y huella del estado leído. Para guardar, confirmar la operación, el centro exacto y la huella. Se comprueba el saldo antes de enviar; la API de ARK sigue siendo responsable de la atomicidad frente a cambios simultáneos.
@@ -21,7 +21,7 @@ El registro de un pago no ordena una transferencia bancaria. La fecha contable e
 
 El servidor requiere `WORK_ENABLE_WRITES=true`, consentimiento OAuth `ark:write` y permisos de la cuenta de ARK. No ampliar los scopes de conexiones ya emitidas: volver a autorizar desde ChatGPT. El valor predeterminado continúa siendo solo lectura para instalaciones nuevas.
 
-En el VPS existente, `scripts/enable-full-workflows-hostinger.sh` prepara una versión separada, construye solo el servicio `ark-work` y reutiliza el Compose, `.env` y volumen actuales. No modifica el proxy compartido ni otros servicios. Guarda un override persistente y uno de rollback con la imagen anterior y el indicador de escritura. Revisar el script antes de ejecutarlo. No confundir preparación del código con despliegue efectivo.
+En el VPS existente, `scripts/enable-full-workflows-hostinger.sh` prepara una versión separada a partir de `main`, construye solo el servicio `ark-work` y reutiliza el Compose, `.env` y volumen actuales. No modifica el proxy compartido ni otros servicios. Guarda un override persistente y uno de rollback con la imagen anterior y el indicador de escritura. Revisar el script antes de ejecutarlo. No confundir preparación del código con despliegue efectivo.
 
 Las skills del paquete acompañan las herramientas; la skill personal `ark-conciliar-facturas` puede usarse con cualquiera de las conexiones ARK que exponga dichas herramientas.
 

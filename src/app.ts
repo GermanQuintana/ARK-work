@@ -97,7 +97,7 @@ export function createApp(settings:Settings, verifyArk=async(config:ArkConfig)=>
     }
   });
   app.all('/mcp',(_req,res)=>res.status(405).set('Allow','POST').end());
-  app.get('/healthz',(_req,res)=>res.json({status:'ok',service:'ark-work',version:'0.2.0'}));
+  app.get('/healthz',(_req,res)=>res.json({status:'ok',service:'ark-work',version:'0.2.1'}));
   app.get('/',(_req,res)=>res.send(page('ARK Work','<h1>ARK Work</h1><p>Conecta tu clínica con ChatGPT Work mediante un MCP remoto autenticado.</p><p>Para iniciar la conexión, añade este servidor desde Plugins de ChatGPT con la dirección HTTPS de este servicio seguida de <b>/mcp</b>.</p><p><a href="https://github.com/GermanQuintana/ARK-work">Código y documentación</a></p>')));
   app.use((_error:unknown,_req:Request,res:Response,_next:unknown)=>{if(!res.headersSent)res.status(400).json({error:'Solicitud no válida'});});
   const prune=setInterval(()=>store.prune(),3600_000);prune.unref();

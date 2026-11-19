@@ -14,7 +14,7 @@ export interface ClienteArk {
 export interface LoteEntrada {
   numeroLote: string;
   caducidad?: string; // "YYYY-MM-DD" | "MM/YYYY" | "MM/YY". Opcional si el lote ya existe (se autocompleta)
-  cantidad?: number; // unidades de este lote; por defecto, la cantidad de la línea
+  cantidad?: number; // cantidad en la unidad de compra de la línea
 }
 
 interface LoteArk {
@@ -25,8 +25,9 @@ interface LoteArk {
 
 export interface LineaCompra {
   idArticulo: number;
-  cantidad: number;
-  precio: number; // precio de compra unitario SIN IVA, antes de descuento
+  cantidad: number; // cantidad en la unidad de compra del proveedor
+  unidadCompra?: string; // unidad impresa, solo para la revisión de la línea
+  precio: number; // precio por unidad de compra SIN IVA, antes de descuento
   descuento?: number; // fracción 0-1 (0.14) o porcentaje (14); por defecto 0
   descuentos?: number[]; // descuentos compuestos (p. ej. [0.33, 0.14]); se combinan
   descripcion?: string;
@@ -139,6 +140,7 @@ export interface ResultadoCompra {
       idArticulo: number;
       descripcion: string;
       cantidad: number;
+      unidadCompra?: string;
       precioSinIva: number;
       descuento: number;
       ivaCompra: number;
@@ -222,6 +224,7 @@ export async function construirCompra(
     const tasa = art.tipoGravamenCompra?.tasaGravamen ?? 0;
     const re = art.tipoGravamenCompra?.recargoEquivalencia ?? 0;
     const dto = combinarDescuento(linea);
+    // ARK convierte la unidad de compra a la de venta internamente.
     const baseLinea = linea.precio * (1 - dto) * linea.cantidad;
 
     // Trazabilidad: validar lotes y reutilizar los existentes.
@@ -240,7 +243,7 @@ export async function construirCompra(
       );
       if (round(sumaLotes, 4) !== round(linea.cantidad, 4))
         throw new Error(
-          `Las unidades de los lotes (${sumaLotes}) no cuadran con la cantidad de la ` +
+          `Las cantidades de compra de los lotes (${sumaLotes}) no cuadran con la cantidad de la ` +
             `línea (${linea.cantidad}) en "${art.descripcion ?? linea.idArticulo}".`,
         );
       const existentes = await getLotes(linea.idArticulo);
@@ -309,6 +312,7 @@ export async function construirCompra(
       idArticulo: linea.idArticulo,
       descripcion: art.descripcion ?? String(linea.idArticulo),
       cantidad: linea.cantidad,
+      unidadCompra: linea.unidadCompra,
       precioSinIva: linea.precio,
       descuento: dto,
       ivaCompra: tasa,
