@@ -60,11 +60,11 @@ Las creaciones necesitan `idTerminal` (y opcionalmente `idEmpleado`). En ARK Wor
 
 ## Meter una compra desde una FOTO de factura/albarán
 Cuando el usuario aporte una imagen de una factura o albarán de proveedor:
-1. **Lee la foto**: proveedor, nº y fecha del documento y, por cada línea, descripción, cantidad, **precio unitario sin IVA (antes de descuento)**, **descuento(s)** y, si el artículo lleva trazabilidad, **lote y caducidad**.
+1. **Lee la foto**: proveedor, nº y fecha del documento y, por cada línea, descripción, presentación, **cantidad y unidad de compra**, **precio por esa unidad sin IVA (antes de descuento)** y **descuento(s)** y, si el artículo lleva trazabilidad, **lote y caducidad**.
 2. **Identifica en ARK** el proveedor (`ark_buscar_proveedor`) y cada artículo (`ark_buscar_articulo` por descripción o EAN).
 3. **Excluye las líneas "pendiente de servir"** (no entregadas): no entran en stock.
-4. **Muestra al usuario** la tabla extraída (proveedor + líneas + descuentos + lotes + total) para que la revise. No inventes datos que no se lean con claridad; pregunta.
-5. **Construye las líneas** para `ark_crear_compra` (ver abajo) y llama primero **sin `confirmar`** (vista previa): la herramienta calcula el desglose de IVA y los totales. **Compara el total con el del albarán**; si baila algún céntimo, es redondeo de un descuento compuesto: avisa y deja que el usuario decida.
+4. **Muestra al usuario** la tabla extraída con proveedor, cantidad y unidad de compra por línea, precio por esa unidad, descuentos, lotes e importes para que la revise. No inventes datos que no se lean con claridad; pregunta.
+5. **Construye las líneas** para `ark_crear_compra` (ver abajo) y llama primero **sin `confirmar`** (vista previa): la herramienta calcula el desglose de IVA y los totales. **Compara unidades, cantidades, precios, descuentos e importes por línea con el albarán**, además de la base, el IVA y el total. Un total correcto puede ocultar una conversión errónea de cantidad y precio. Si hay diferencias, explica su causa y resuélvelas antes de guardar.
 6. Aplica el **protocolo de confirmación** antes de escribir.
 
 ### `ark_crear_compra` — cómo construir las líneas
@@ -75,17 +75,18 @@ La herramienta arma sola el documento real de ARK (tienda, proveedor, documentoP
 ```
 compra: {
   idProveedor, numeroDocumento, fechaDocumento?, esFactura?, observaciones?,
-  lineas: [{ idArticulo, cantidad, precio, descuento?|descuentos?, descripcion?, lotes? }]
+  lineas: [{ idArticulo, cantidad, unidadCompra?, precio, descuento?|descuentos?, descripcion?, lotes? }]
 }
 ```
-- **`precio`**: unitario **sin IVA, antes de descuento** (la columna "Precio" del albarán). El IVA de compra lo saca la herramienta del artículo (¡ojo! el IVA de **compra** puede diferir del de **venta**).
+- **`cantidad` y `unidadCompra`**: copia la cantidad anotada por el proveedor y su unidad de compra. El contenido del envase identifica la presentación. ARK convierte a unidades de venta internamente. Si el documento es ambiguo, aclara la unidad antes de preparar la compra.
+- **`precio`**: precio **por esa unidad de compra, sin IVA y antes del descuento**. El IVA de compra lo saca la herramienta del artículo (¡ojo! el IVA de **compra** puede diferir del de **venta**).
 - **`descuento`**: fracción (`0.14`) o porcentaje (`14`). Para descuentos compuestos usa **`descuentos: [0.33, 0.14]`** ("33%+14%"); se combinan.
 - **`esFactura`**: `true` factura, `false` albarán (por defecto).
-- **Envase clínico**: muchos artículos se **venden por unidad** pero se **compran en caja** (de 3, 4, 12, 24...). En ARK el artículo suele estar dado de alta como "caja clínica": pon en `cantidad` las **unidades que entran en stock** según cómo esté configurado el artículo (por caja o por unidad); ante la duda, pregunta al usuario.
+- **Ejemplo**. Una caja de 15 comprimidos a 24 € por caja con un 10 % de descuento se pasa como `cantidad: 1`, `unidadCompra: "caja"`, `precio: 24` y `descuento: 10`. La base es 21,60 € y, si toda la caja es de un mismo lote, la cantidad del lote es 1. No multipliques por 15 ni dividas el precio por 15.
 
 ### Lotes y caducidad (trazabilidad)
 - Los artículos con `trazabilidad=true` **exigen lote**: pasa `lotes: [{ numeroLote, caducidad?, cantidad? }]`.
-- **Una misma línea puede repartir sus unidades en VARIOS lotes** (p. ej. 20 uds = 12 del lote A + 8 del lote B), y mezclar lotes nuevos y existentes. Cuando hay más de un lote, **indica la `cantidad` de cada uno**; la suma debe cuadrar con la `cantidad` de la línea (si no, la herramienta avisa). Con un solo lote, su cantidad es la de la línea.
+- **Una misma línea puede repartir la cantidad de compra en varios lotes** (p. ej. 3 cajas = 2 del lote A + 1 del lote B), y mezclar lotes nuevos y existentes. Cuando hay más de un lote, **indica la `cantidad` de cada uno**; la suma debe cuadrar con la `cantidad` de la línea (si no, la herramienta avisa). Con un solo lote, su cantidad es la de la línea.
 - **Si el lote YA EXISTE** (mismo número para ese artículo), la herramienta lo **reutiliza automáticamente (autocompleta)** con su caducidad guardada; la `caducidad` es opcional en ese caso.
 - **Si el lote es NUEVO**, hay que **crearlo**: la `caducidad` es **obligatoria** (`YYYY-MM-DD` o `MM/YYYY`).
 - La vista previa marca cada lote como `existente` o `nuevo` para que lo revises.
@@ -98,9 +99,13 @@ Cuando una línea del albarán no tenga ficha en ARK, decide según **qué tipo 
 - Si el documento ya está en ARK, los artículos nuevos se dan de alta con `ark_crear_articulos_desde_documento`.
 
 ### Vía documento de proveedor (alternativa)
-- Si el documento ya existe en ARK (`ark_documentos_proveedor_pendientes`), da de alta los artículos nuevos con `ark_crear_articulos_desde_documento` y conviértelo con `ark_crear_compra_desde_documento`.
+- Si el documento ya existe en ARK (`ark_documentos_proveedor_pendientes`), da de alta los artículos nuevos con `ark_crear_articulos_desde_documento` y comprueba en las líneas originales que cantidad, precio y descuentos corresponden a la unidad de compra del proveedor. Usa `ark_crear_compra_desde_documento` solo si coinciden. Esta herramienta delega la conversión a ARK y no permite editar las líneas. Si falta información o las líneas discrepan, usa el documento original para preparar la entrada con `ark_crear_compra` cuando esté completa y comprueba antes que el albarán no esté ya registrado.
 
 ## Presentación
 - Responde en español y en lenguaje natural; no vuelques JSON salvo que lo pidan.
 - Importes en euros. Fechas legibles. Distingue claramente **lo que nos deben** (clientes) de **lo que debemos** (proveedores).
 - Al mostrar una vista previa de escritura, deja muy claro que **aún no se ha guardado nada**.
+
+## Facturas que agrupan albaranes, vencimientos y pagos
+
+Usar `ark-conciliar-facturas` cuando se aporte una factura para comprobar los albaranes ya registrados, forma de pago, vencimientos o pago. No crear otra compra por el total de una factura si sus albaranes ya han entrado en stock. Consultar pagos a proveedores con `ark_buscar_pago_proveedor` y distinguirlos de cobros de clientes. Un vencimiento o domiciliación no acreditan pago. Registrar únicamente un asiento justificado o un pago previsto claramente identificado y verificar el resultado.
