@@ -1,0 +1,4 @@
+interface:
+  display_name: "Alta de productos en ARK"
+  short_description: "Prepara fichas con EAN, unidades de compra y venta y PVP"
+  default_prompt: "Usa $ark-crear-productos para preparar el alta de estos productos en ARK y mostrarme la ficha para revisarla."

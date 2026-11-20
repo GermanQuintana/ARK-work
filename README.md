@@ -84,3 +84,12 @@ ARK Work sigue requiriendo despliegue y registro del servicio remoto. La skill n
 ## Facturas de proveedor e historiales
 
 El circuito completo de conciliación de albaranes, anotación de condiciones, vencimientos, pagos y edición de visitas existentes se describe en [FACTURAS-PROVEEDORES-Y-ESCRITURA.md](docs/FACTURAS-PROVEEDORES-Y-ESCRITURA.md). Requiere desplegar esta versión y autorizar escritura; disponer de una skill no activa el servidor.
+
+
+## Flujos de catálogo, ventas y facturación
+
+- [Alta de productos](plugin/skills/ark-crear-productos/SKILL.md): EAN, unidades de compra y venta, controles de almacén y cálculo de PVP.
+- [Albaranes de venta](plugin/skills/ark-albaranes-venta/SKILL.md): revisión en la terminal de ARK y guardado tras confirmación.
+- [Conciliación de facturas](plugin/skills/ark-conciliar-facturas/SKILL.md): verifica albaranes vinculados, forma de pago, vencimientos y cobros o pagos existentes.
+
+El alta general de catálogo, el guardado de albaranes de venta y el registro de cobros de clientes usan la interfaz de ARK si la conexión no expone esas escrituras. La revisión de facturas de proveedor reutiliza las herramientas MCP documentadas en [Facturas de proveedor y escritura clínica](docs/FACTURAS-PROVEEDORES-Y-ESCRITURA.md).
