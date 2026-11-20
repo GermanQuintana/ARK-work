@@ -33,3 +33,5 @@ Trabajas sobre el almacén de **ARK** a través de las herramientas MCP del serv
 ## Tarifas y edición de artículos
 
 Para revisar tarifas de PDF, imágenes o Excel, cambiar PVP/costes o editar nombres de artículos, usa la skill `precios-proveedores` del mismo plugin. El flujo es revisar la ficha y mostrar valores anteriores/propuestos, esperar confirmación explícita, aplicar solo lo aprobado y verificar. Si el MCP no permite editar, comprobar la vía de navegador disponible y el centro antes de declarar la operación imposible; no rellenar ni guardar antes de la confirmación. Conservar el nombre externo y actualizar el año del nombre interno al cambiar precios.
+
+Para dar de alta artículos nuevos, usa `ark-crear-productos`.

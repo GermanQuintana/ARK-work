@@ -1,0 +1,4 @@
+interface:
+  display_name: "Albaranes de venta en ARK"
+  short_description: "Revisa un albarán de cliente en su terminal antes de guardarlo"
+  default_prompt: "Usa $ark-albaranes-venta para preparar y revisar este albarán en la terminal indicada antes de guardarlo."
