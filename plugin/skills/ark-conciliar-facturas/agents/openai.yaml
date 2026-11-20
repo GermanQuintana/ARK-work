@@ -1,0 +1,4 @@
+interface:
+  display_name: "Revisión de facturas en ARK"
+  short_description: "Comprueba albaranes, cobros, pagos y vencimientos"
+  default_prompt: "Usa $ark-conciliar-facturas para comprobar esta factura y sus albaranes en ARK y revisar su forma de pago y vencimientos."

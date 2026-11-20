@@ -1,0 +1,44 @@
+name: Upgrade vulnerable production packages (security branch only)
+
+on:
+  push:
+    branches:
+      - security/multi-tenant-hardening-nov2026
+    paths:
+      - '.github/workflows/dependency-remediation.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  remediate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Upgrade Zod to nonvulnerable major and fix compatible dependencies
+        run: |
+          npm install zod@4.6.7 --save-exact --ignore-scripts
+          npm audit fix --ignore-scripts
+      - name: Verify full application tests
+        run: npm test
+      - name: Check production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Commit lockfile and package changes to security branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          if ! git diff --cached --quiet; then
+            git commit -m "deps: remediate audited runtime vulnerabilities"
+            git push origin HEAD:security/multi-tenant-hardening-nov2026
+          fi
+
+# Retry remediation after Zod v4 compatibility fix.

@@ -8,10 +8,24 @@ import { Store, opaque, hash } from './store.js';
 
 export const READ = 'ark:read';
 export const WRITE = 'ark:write';
+
+// ChatGPT creates a unique callback for each personal MCP registration.
+// Accept only exact, well-formed OpenAI callbacks. Never allow arbitrary
+// redirect origins, query strings, fragments, ports or lookalike domains.
+export function allowedChatGptRedirect(uri:string, configured:Set<string>):boolean {
+  if(configured.has(uri)) return true;
+  if(!/^https:\/\/chatgpt\.com\/connector\/oauth\/[A-Za-z0-9_-]{8,128}$/.test(uri)) return false;
+  try {
+    const url=new URL(uri);
+    return url.origin==='https://chatgpt.com' && !url.search && !url.hash &&
+      !url.username && !url.password && url.port==='';
+  }catch{return false;}
+}
+
 export interface Profile { id: string; config: ArkConfig; label: string }
 export interface Pending { client: OAuthClientInformationFull; params: AuthorizationParams; csrf: string; cookie: string }
 interface Grant { client: string; profile: string; scopes: string[]; challenge: string; redirect: string; resource: string }
-interface Family { profile: string; client: string; scopes: string[]; resource: string; expires: number; revoked: boolean }
+interface Family { profile: string; client: string; scopes: string[]; resource: string; expires: number; revoked: boolean; ownedProfile?: boolean }
 interface Token { family: string; used?: boolean; expiresAt?: number }
 
 export class WorkAuth implements OAuthServerProvider {
@@ -20,7 +34,7 @@ export class WorkAuth implements OAuthServerProvider {
     this.clientsStore = {
       getClient: async id => store.get<OAuthClientInformationFull>('client',id),
       registerClient: async input => {
-        if (!input.redirect_uris.length || input.redirect_uris.some(uri => !redirects.has(uri))) throw new InvalidClientMetadataError('Redirect URI not allowed');
+        if (!input.redirect_uris.length || input.redirect_uris.length>3 || input.redirect_uris.some(uri => !allowedChatGptRedirect(uri,redirects))) throw new InvalidClientMetadataError('Redirect URI not allowed');
         if (input.token_endpoint_auth_method && !['none','client_secret_post'].includes(input.token_endpoint_auth_method)) throw new InvalidClientMetadataError('Use none or client_secret_post');
         const client = {...input, client_id:opaque(),client_id_issued_at:Math.floor(Date.now()/1000),client_secret_expires_at:0};
         store.put('client',client.client_id,client);
@@ -39,7 +53,7 @@ export class WorkAuth implements OAuthServerProvider {
     this.checkResource(params.resource);
     params.scopes = params.scopes?.length ? params.scopes : [READ];
     this.checkScopes(params.scopes);
-    if (!this.redirects.has(params.redirectUri)) throw new InvalidClientMetadataError('Redirect not allowed');
+    if (!allowedChatGptRedirect(params.redirectUri,this.redirects) || !client.redirect_uris.includes(params.redirectUri)) throw new InvalidClientMetadataError('Redirect not allowed for client');
     const flow=opaque(), cookie=opaque(), csrf=opaque();
     this.store.put('pending',hash(flow),{client,params:{...params,resource:params.resource?.href},cookie:hash(cookie),csrf},Date.now()+10*60_000);
     res.cookie('ark_work_flow',cookie,{httpOnly:true,secure:this.origin.protocol==='https:',sameSite:'lax',path:'/login',maxAge:10*60_000});
@@ -54,11 +68,11 @@ export class WorkAuth implements OAuthServerProvider {
   complete(flow:string, config:ArkConfig, label:string, allowWrite:boolean) {
     const pending=this.pending(flow);
     if(!pending) throw new InvalidGrantError('Authorization expired');
-    const identity=hash(config.baseUrl+'\0'+config.tenant+'\0'+config.username);
-    const existing=this.store.get<{id:string}>('identity',identity);
-    const profile:Profile={id:existing?.id??opaque(),config,label};
-    this.store.put('profile',profile.id,profile);
-    this.store.put('identity',identity,{id:profile.id});
+    // Never deduplicate by tenant+username: distinct OAuth connections must
+    // not share a mutable credential record, even if they use a shared ARK login.
+    const profile:Profile={id:opaque(),config,label};
+    // If the browser abandons the OAuth code exchange, credentials expire quickly.
+    this.store.put('profile',profile.id,profile,Date.now()+10*60_000);
     const scopes=(pending.params.scopes??[READ]).filter(scope=>scope!==WRITE||allowWrite);
     const code=opaque();
     this.store.put('code',hash(code),{client:pending.client.client_id,profile:profile.id,scopes,challenge:pending.params.codeChallenge,redirect:pending.params.redirectUri,resource:this.resource.href} satisfies Grant,Date.now()+60_000);
@@ -78,8 +92,12 @@ export class WorkAuth implements OAuthServerProvider {
     const grant=this.store.get<Grant>('code',hash(code));
     if(!grant||grant.client!==client.client_id||grant.redirect!==redirect||grant.resource!==resource?.href) throw new InvalidGrantError('Invalid authorization code');
     this.store.delete('code',hash(code));
-    const family=opaque();
-    this.store.put('family',family,{profile:grant.profile,client:grant.client,scopes:grant.scopes,resource:grant.resource,expires:Date.now()+30*86400_000,revoked:false} satisfies Family,Date.now()+30*86400_000);
+    const profile=this.store.get<Profile>('profile',grant.profile);
+    if(!profile) throw new InvalidGrantError('Connection profile expired');
+    const family=opaque(), expires=Date.now()+30*86400_000;
+    // Keep credentials no longer than the family lifetime (30 days).
+    this.store.put('profile',profile.id,profile,expires);
+    this.store.put('family',family,{profile:grant.profile,client:grant.client,scopes:grant.scopes,resource:grant.resource,expires,revoked:false,ownedProfile:true} satisfies Family,expires);
     return this.issue(family);
   }
   private issue(familyId:string):OAuthTokens {
@@ -114,7 +132,12 @@ export class WorkAuth implements OAuthServerProvider {
   }
   private revokeFamily(id:string) {
     const family=this.store.get<Family>('family',id);
-    if(family)this.store.put('family',id,{...family,revoked:true},family.expires);
+    if(family){
+      this.store.put('family',id,{...family,revoked:true},family.expires);
+      // Delete only records created with one-profile-per-grant semantics.
+      // Legacy profiles may be shared by more than one OAuth family.
+      if(family.ownedProfile) this.store.delete('profile',family.profile);
+    }
   }
   async revokeToken(client:OAuthClientInformationFull, req:OAuthTokenRevocationRequest) {
     const token=this.store.get<Token>('access',hash(req.token))??this.store.get<Token>('refresh',hash(req.token));

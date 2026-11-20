@@ -3,12 +3,13 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { ArkClient, ArkError, type ArkConfig } from './arkClient.js';
 import { construirCompra, type EntradaCompra } from './compra.js';
+import { registerExtendedTools, EXTENDED_WRITE_TOOLS } from './extendedTools.js';
 
 export function createArkServer(config: ArkConfig, allowWrites = false) {
 const client = new ArkClient(config);
 const writeCtx = { username: config.username, idTerminal: undefined as number | undefined, idEmpleado: undefined as number | undefined };
 const server = new McpServer(
-  { name: "ark-work", version: "0.1.0" },
+  { name: "ark-work", version: "0.2.1" },
   {
     instructions:
       "ARK contiene datos reales de producción. Las consultas son de solo lectura. " +
@@ -19,6 +20,7 @@ const server = new McpServer(
 );
 
 const WRITE_TOOLS = new Set([
+  ...EXTENDED_WRITE_TOOLS,
   "ark_enviar_recordatorios_email",
   "ark_crear_pedido",
   "ark_emitir_pedido",
@@ -107,7 +109,7 @@ function fail(err: unknown): ToolResult {
   const msg =
     err instanceof ArkError
       ? `Error ARK (${err.status}): no se pudo completar la operación.`
-      : `Error: ${(err as Error)?.message ?? String(err)}`;
+      : 'Error interno de la operación. Consulta los registros técnicos sin datos sensibles.';
   return { content: [{ type: "text", text: msg }], isError: true };
 }
 
@@ -1440,7 +1442,7 @@ server.registerTool(
     description:
       "Emite (envía) un pedido a proveedor ya creado (ESCRIBE en producción). La vista previa muestra tienda y terminal; para ejecutar exige centroEsperado coincidente y confirmar=true. Se le pasa el objeto del pedido obtenido de ark_ficha_pedido.",
     inputSchema: {
-      pedido: z.record(z.any()).describe("Objeto del pedido a emitir (de ark_ficha_pedido)"),
+      pedido: z.record(z.string(),z.any()).describe("Objeto del pedido a emitir (de ark_ficha_pedido)"),
       ...ctxEscritura,
     },
   },
@@ -1475,13 +1477,14 @@ const loteCompra = z.object({
   cantidad: z
     .number()
     .optional()
-    .describe("Unidades de este lote. Si la línea tiene un solo lote, por defecto la cantidad de la línea"),
+    .describe("Cantidad de este lote en la misma unidad de compra que la línea. Con un solo lote, por defecto se usa la cantidad de la línea."),
 });
 
 const lineaCompra = z.object({
   idArticulo: z.number().int().describe("Id del artículo en ARK (usa ark_buscar_articulo; para fungibles sin ficha usa CONCEPTOS VARIOS al 4/10/21%)"),
-  cantidad: z.number().describe("Unidades compradas (envase clínico: si el artículo se vende por unidad pero se compra en caja de N, indica las unidades que entran en stock)"),
-  precio: z.number().describe("Precio de compra unitario SIN IVA, antes de descuento (columna 'Precio' del albarán)"),
+  cantidad: z.number().describe("Cantidad del albarán en su unidad de compra. Una caja de 15 comprimidos se registra como 1 caja. ARK hace la conversión a la unidad de venta."),
+  unidadCompra: z.string().trim().min(1).optional().describe("Unidad de compra del albarán (p. ej. caja, saco, bote o unidad). Se muestra en el resumen y no modifica el artículo de ARK."),
+  precio: z.number().describe("Precio por la misma unidad de compra del albarán, SIN IVA y antes de descuento. Para cajas, precio de una caja completa."),
   descuento: z
     .number()
     .optional()
@@ -1494,7 +1497,7 @@ const lineaCompra = z.object({
   lotes: z
     .array(loteCompra)
     .optional()
-    .describe("Lotes (obligatorio en artículos con trazabilidad). Reparte las unidades por lote"),
+    .describe("Lotes (obligatorio en artículos con trazabilidad). Reparte la cantidad en unidades de compra por lote"),
 });
 
 const cuerpoCompra = z.object({
@@ -1511,7 +1514,7 @@ server.registerTool(
   {
     title: "Crear compra a proveedor",
     description:
-      "Crea una compra (entrada de mercancía) a proveedor en ARK (ESCRIBE en producción: afecta stock y cuenta del proveedor). Construye el documento real, calcula IVA y totales y gestiona lotes. La vista previa muestra tienda y terminal; para ejecutar exige centroEsperado coincidente y confirmar=true. Excluye las líneas 'pendiente de servir'.",
+      "Crea una compra (entrada de mercancía) a proveedor en ARK (ESCRIBE en producción: afecta stock y cuenta del proveedor). Usa la cantidad y el precio en la unidad de compra del proveedor. ARK aplica la conversión a la unidad de venta. Calcula IVA y totales y gestiona lotes. La vista previa muestra tienda y terminal; para ejecutar exige centroEsperado coincidente y confirmar=true. Excluye las líneas 'pendiente de servir'.",
     inputSchema: { compra: cuerpoCompra, ...ctxEscritura },
   },
   async ({ compra, idTerminal, idEmpleado, centroEsperado, confirmar }) => {
@@ -1526,7 +1529,7 @@ server.registerTool(
         return ok({
           vistaPrevia: true,
           aviso:
-            "No se ha escrito nada en ARK. Revisa centro, terminal, importes e IVA; " +
+            "No se ha escrito nada en ARK. Revisa centro, terminal, unidades de compra, cantidades, precios, descuentos, importes e IVA; " +
             "después repite con centroEsperado y confirmar=true.",
           contextoCentro,
           resumen,
@@ -1545,7 +1548,7 @@ server.registerTool(
   {
     title: "Crear compra desde un documento de proveedor",
     description:
-      "Convierte un documento de proveedor existente en una compra (ESCRIBE en producción). La vista previa muestra tienda y terminal; para ejecutar exige centroEsperado coincidente y confirmar=true. Antes puede ser necesario dar de alta los artículos nuevos.",
+      "Convierte un documento de proveedor existente en una compra (ESCRIBE en producción). La vista previa muestra tienda y terminal; para ejecutar exige centroEsperado coincidente y confirmar=true. Antes de confirmar, comprueba en el documento de ARK las cantidades, precios y descuentos en unidades de compra. Esta acción delega la conversión a ARK y no admite modificar líneas. Antes puede ser necesario dar de alta los artículos nuevos.",
     inputSchema: {
       idDocumentoProveedor: z.number().int().describe("Id del documento de proveedor"),
       ...ctxEscritura,
@@ -1611,5 +1614,6 @@ server.registerTool(
 );
 
 
+registerExtendedTools(server, client);
 return server;
 }

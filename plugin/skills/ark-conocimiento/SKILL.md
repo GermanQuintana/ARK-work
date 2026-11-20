@@ -24,7 +24,7 @@ description: Conocimiento de fondo sobre el sistema de gestión veterinaria ARK 
 - **Factura / Cobro**: venta a cliente y su pago; `importeTotal`, `importePendiente`.
 - **Proveedor**: suministrador; tiene `saldo` (lo que le debemos).
 - **Compra / Pedido**: entrada de mercancía y solicitud a proveedor; sus líneas son las `operaciones`.
-- **Documento de proveedor**: factura/albarán recibido, convertible en compra.
+- **Documento de proveedor**: factura/albarán recibido, convertible en compra. Las líneas de compra conservan cantidades y precios en las unidades del proveedor. ARK las convierte a unidades de venta internamente.
 
 ## Convenciones de las herramientas
 - Los identificadores son numéricos (`id`). El flujo normal es **buscar → obtener id → consultar detalle**.

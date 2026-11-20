@@ -1,0 +1,32 @@
+name: ARK Work security checks
+
+on:
+  push:
+    branches:
+      - security/multi-tenant-hardening-nov2026
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Run automated tests
+        run: npm test
+      - name: Audit production dependency vulnerabilities
+        run: npm audit --omit=dev --audit-level=high

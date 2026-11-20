@@ -1,11 +1,11 @@
 ---
 name: ark-clinica
-description: 'Consultar clientes, mascotas e información clínica en ARK gestión veterinaria. Úsala cuando el usuario pregunte por un cliente o propietario, por una mascota/paciente, su historia clínica o historial de visitas, sus recordatorios pendientes (vacunas, desparasitaciones), su saldo pendiente o sus próximas citas, o cuando quiera LISTAR mascotas por raza o clientes por población/localidad. Ejemplos: "busca el cliente García", "¿qué mascotas tiene Cecilia?", "enséñame el historial de Elliot", "¿tiene recordatorios pendientes?", "¿cuánto debe este cliente?", "dame todas las mascotas de raza Pastor Alemán", "lista los clientes de Foz".'
+description: 'Consultar clientes, mascotas y completar visitas clínicas existentes en ARK gestión veterinaria. Úsala cuando el usuario pregunte por un cliente o propietario, por una mascota/paciente, su historia clínica o historial de visitas, sus recordatorios pendientes (vacunas, desparasitaciones), su saldo pendiente o sus próximas citas, o cuando quiera LISTAR mascotas por raza o clientes por población/localidad. Ejemplos: "busca el cliente García", "¿qué mascotas tiene Cecilia?", "enséñame el historial de Elliot", "¿tiene recordatorios pendientes?", "¿cuánto debe este cliente?", "dame todas las mascotas de raza Pastor Alemán", "lista los clientes de Foz".'
 ---
 
 # Consulta clínica y de clientes en ARK
 
-Trabajas sobre el sistema de gestión veterinaria **ARK** a través de las herramientas MCP del servidor `ark`. Los datos son **de producción y de solo lectura**: nunca inventes datos; si una herramienta no devuelve resultados, dilo claramente.
+Trabajas sobre el sistema de gestión veterinaria **ARK** a través de las herramientas MCP del servidor `ark`. Los datos son **de producción**. Las consultas son de solo lectura; completar una visita escribe y exige vista previa y confirmación: nunca inventes datos; si una herramienta no devuelve resultados, dilo claramente.
 
 ## Vocabulario ARK
 - **Cliente / propietario**: la persona (o empresa) titular. Se identifica por `id`.
@@ -75,3 +75,9 @@ Antes de proponer un recordatorio a un propietario, **revisa el contexto de la m
 
 ## Paginación
 Las búsquedas aceptan `page` (base 0) y `size` (máx. 100, por defecto 20). Si hay muchos resultados, ofrece afinar la búsqueda o pedir la siguiente página.
+
+## Completar un historial existente
+
+Usar `ark_ficha_visita(idVisita)` para recuperar la visita completa. Confirmar paciente y centro. Usar `ark_actualizar_visita` para anamnesis, diagnóstico, tratamiento o anotaciones: el modo predeterminado `anexar` conserva el texto anterior. `sustituir` solo cuando el usuario pida reemplazarlo. No inventar hallazgos clínicos ni crear recetas o tratamientos facturados a partir de texto. La herramienta conserva pruebas, recetas y tratamientos existentes.
+
+Preparar con `confirmar=false`, mostrar los cambios y el centro y, tras la confirmación exigida, repetir con `confirmar=true`, `centroEsperado` exacto y `huellaEsperada`. Una visita cerrada o anulada requiere revisión en ARK. Releer la visita tras guardar. Si no está disponible la herramienta, no afirmar que se guardó el historial.

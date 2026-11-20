@@ -9,6 +9,7 @@ const service=createApp({
   encryptionKey:key,dbPath:process.env.WORK_DB_PATH??'./data/ark-work.sqlite',
   redirects:new Set(required('OAUTH_REDIRECT_URIS').split(',').map(x=>x.trim()).filter(Boolean)),
   trustProxyHops:proxyHops,
+  enableWrites:process.env.WORK_ENABLE_WRITES==='true',
 });
 const listener=service.app.listen(Number(process.env.PORT??8787),process.env.HOST??'127.0.0.1',()=>console.log('ARK Work listening'));
 for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>listener.close(()=>{service.close();process.exit(0);}));
